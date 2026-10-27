@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+educagen.db
+storage/
+.pytest_cache/

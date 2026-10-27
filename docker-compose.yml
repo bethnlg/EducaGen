@@ -1,0 +1,41 @@
+# Servicios del backend según la arquitectura de despliegue del OB2 (Figura 2).
+# El frontend (Next.js) se ejecuta aparte con "npm run dev" o en Vercel.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: educagen
+      POSTGRES_PASSWORD: educagen
+      POSTGRES_DB: educagen
+    ports:
+      - "5432:5432"
+    volumes:
+      - datos_pg:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U educagen"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://educagen:educagen@db:5432/educagen
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - archivos:/app/storage
+
+volumes:
+  datos_pg:
+  archivos:
