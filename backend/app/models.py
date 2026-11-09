@@ -57,6 +57,15 @@ class TokenRecuperacion(Base):
     usado: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class TokenVerificacion(Base):
+    __tablename__ = "token_verificacion"
+    id_token: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id_usuario: Mapped[int] = mapped_column(ForeignKey("usuario.id_usuario", ondelete="CASCADE"))
+    token_hash: Mapped[str] = mapped_column(String(255), index=True)
+    fecha_expiracion: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    usado: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
 class Carrera(Base):
     __tablename__ = "carrera"
     id_carrera: Mapped[int] = mapped_column(Integer, primary_key=True)

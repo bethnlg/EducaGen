@@ -46,7 +46,9 @@ npm install
 npm run dev
 ```
 
-Abre http://localhost:3000. Next.js reenvía las rutas `/api/*` a la API (ver `next.config.mjs`). `JWT_SECRET` debe ser igual en `.env.local` y en `backend/.env`.
+Abre http://localhost:3000. Next.js reenvía las rutas `/api/*` a la API (ver `next.config.mjs`). `JWT_SECRET` debe ser igual en `.env.local` y en `backend/.env`. El registro requiere un correo institucional terminado en `.edu` o `.edu.xx`; después se debe confirmar el enlace enviado por correo en `/verificar`.
+
+Al exportar un recurso, el menú permite elegir el membrete de una universidad privada con presencia en Lima. La selección se envía a la API y el logo se almacena en caché para PDF, Word, Excel y HTML; si no se puede recuperar, se conserva el nombre de la universidad y el membrete configurado como respaldo.
 
 ### 3. Claves de IA
 
@@ -82,7 +84,7 @@ pytest -q
 | HU0012-HU0014 Asistente, streaming, bibliografía APA | Editor + `routers/asistente.py` |
 | HU0015-HU0016 Edición manual y autoguardado (con copia sin conexión) | `app/(privado)/editor/[id]` |
 | HU0017-HU0020 Historial, búsqueda, duplicar, papelera 30 días | `app/(privado)/historial` |
-| HU0021-HU0023 Exportar con formato y membrete | `services/exportador.py` |
+| HU0021-HU0023 Exportar con formato, membrete y logo universitario | `services/exportador.py`, `services/universidades.py`, `lib/universidades.js` |
 | HU0024 Indicador de conformidad | `services/esquemas.py` → `verificar_conformidad` |
 | HU0025, HU0027 Aprobación, % editado y tiempo activo | Editor + `/aprobacion`, `/aprobar` |
 | HU0026, HU0032 Panel de calidad | `app/(privado)/calidad`, `routers/calidad.py` |

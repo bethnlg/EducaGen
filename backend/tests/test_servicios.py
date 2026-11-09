@@ -53,6 +53,15 @@ def test_exportacion_en_todos_los_formatos():  # HU0021
         assert len(datos) > 200 and ext
 
 
+def test_exportacion_usa_nombre_de_universidad_seleccionada():
+    secciones = esquemas.json_a_secciones("rubrica", generar_recurso("rubrica", PARAMS["rubrica"]))
+    datos, _, _ = exportador.exportar(
+        "html", "Rúbrica", secciones, membrete=True,
+        meta={"universidad_clave": "pucp", "universidad_nombre": "Pontificia Universidad Católica del Perú"},
+    )
+    assert "Pontificia Universidad Católica del Perú" in datos.decode("utf-8")
+
+
 def test_bibliografia_marcada_por_verificar():  # HU0014
     secciones = esquemas.json_a_secciones("silabo", generar_recurso("silabo", PARAMS["silabo"]))
     respuesta = responder_asistente({"mensaje": "Agrega bibliografía APA", "secciones": secciones, "curso": "Algoritmos"})

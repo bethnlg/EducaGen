@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from ..config import config
 from ..database import get_db
 from ..deps import usuario_actual
-from ..models import TokenRecuperacion, Usuario
+from ..models import TokenRecuperacion, TokenVerificacion, Usuario
 from ..schemas import LoginIn, OlvidoIn, RegistroIn, RestablecerIn
 from ..security import COOKIE_SESION, crear_token, hash_contrasena, hash_token, nuevo_token_recuperacion, verificar_contrasena
 from ..services import correo
@@ -18,11 +18,11 @@ from ..services import correo
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 log = logging.getLogger("educagen.auth")
 
-EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.edu(?:\.[a-z]{2,})?$", re.IGNORECASE)
 
 
-def _err(codigo: int, mensaje: str, **extra):
-    raise HTTPException(codigo, detail={"mensaje": mensaje, **extra})
+def _err(estado: int, mensaje: str, **extra):
+    raise HTTPException(estado, detail={"mensaje": mensaje, **extra})
 
 
 def _poner_cookie(respuesta: Response, usuario: Usuario):
@@ -43,7 +43,7 @@ def registrar(datos: RegistroIn, respuesta: Response, tareas: BackgroundTasks, d
     if faltan:
         _err(400, "Completa todos los campos.", campos=faltan)
     if not EMAIL_RE.match(correo_n):
-        _err(400, "Ingresa un correo válido.", campos=["correo"])
+        _err(400, "Ingresa un correo institucional terminado en .edu o .edu.xx.", campos=["correo"])
     if len(datos.contrasena) < 8:
         _err(400, "La contraseña debe tener al menos 8 caracteres.", campos=["contrasena"])
     if db.scalar(select(Usuario).where(Usuario.correo_institucional == correo_n)):  # HU0001-2
@@ -52,13 +52,17 @@ def registrar(datos: RegistroIn, respuesta: Response, tareas: BackgroundTasks, d
     partes = nombre.split(" ", 1)
     usuario = Usuario(id_rol=1, nombres=partes[0], apellidos=partes[1] if len(partes) > 1 else "",
                       correo_institucional=correo_n, hash_contrasena=hash_contrasena(datos.contrasena),
-                      ultimo_acceso=datetime.now(timezone.utc))
+                      estado="pendiente_verificacion", ultimo_acceso=None)
     db.add(usuario)
     db.commit()
     db.refresh(usuario)
-    _poner_cookie(respuesta, usuario)
-    tareas.add_task(_enviar_seguro, correo.enviar_bienvenida, correo_n, usuario.nombre_completo)  # HU0001-1
-    return {"ok": True, "usuario": _perfil(usuario)}
+    token, token_hash = nuevo_token_recuperacion()
+    db.add(TokenVerificacion(id_usuario=usuario.id_usuario, token_hash=token_hash,
+                             fecha_expiracion=datetime.now(timezone.utc) + timedelta(hours=24)))
+    db.commit()
+    enlace = f"{config.APP_URL}/verificar?correo={correo_n}&token={token}"
+    tareas.add_task(_enviar_seguro, correo.enviar_verificacion, correo_n, usuario.nombre_completo, enlace)
+    return {"ok": True, "requiere_verificacion": True, "correo": correo_n}
 
 
 @router.post("/login")
@@ -67,8 +71,10 @@ def iniciar_sesion(datos: LoginIn, respuesta: Response, db: Session = Depends(ge
     if not correo_n or not datos.contrasena:
         _err(400, "Ingresa tu correo y contraseña.")
     usuario = db.scalar(select(Usuario).where(Usuario.correo_institucional == correo_n))
-    if not usuario or usuario.estado != "activo" or not verificar_contrasena(datos.contrasena, usuario.hash_contrasena):
+    if not usuario or usuario.estado not in ("activo", "pendiente_verificacion") or not verificar_contrasena(datos.contrasena, usuario.hash_contrasena):
         _err(401, "El correo o la contraseña no son correctos.")  # HU0002-2: mensaje general
+    if usuario.estado == "pendiente_verificacion":
+        _err(403, "Confirma tu correo institucional desde el enlace que enviamos antes de iniciar sesión.", codigo="correo_no_verificado")
     usuario.ultimo_acceso = datetime.now(timezone.utc)
     db.commit()
     _poner_cookie(respuesta, usuario)
@@ -81,6 +87,26 @@ def cerrar_sesion(respuesta: Response):
     return {"ok": True}
 
 
+@router.post("/verify")
+def verificar_correo(datos: OlvidoIn, token: str, db: Session = Depends(get_db)):
+    correo_n = datos.correo.strip().lower()
+    usuario = db.scalar(select(Usuario).where(Usuario.correo_institucional == correo_n))
+    verificacion = None
+    if usuario:
+        verificacion = db.scalar(select(TokenVerificacion).where(
+            TokenVerificacion.id_usuario == usuario.id_usuario,
+            TokenVerificacion.token_hash == hash_token(token),
+            TokenVerificacion.usado.is_(False),
+        ))
+    ahora = datetime.now(timezone.utc)
+    if not verificacion or _aware(verificacion.fecha_expiracion) < ahora:
+        _err(400, "El enlace de verificación no es válido o ya venció. Solicita uno nuevo.")
+    usuario.estado = "activo"
+    verificacion.usado = True
+    db.commit()
+    return {"ok": True, "mensaje": "Correo confirmado. Ya puedes iniciar sesión."}
+
+
 @router.get("/me")
 def yo(usuario: Usuario = Depends(usuario_actual)):
     return _perfil(usuario)
@@ -90,7 +116,7 @@ def yo(usuario: Usuario = Depends(usuario_actual)):
 def olvido(datos: OlvidoIn, tareas: BackgroundTasks, db: Session = Depends(get_db)):
     correo_n = datos.correo.strip().lower()
     if not EMAIL_RE.match(correo_n):
-        _err(400, "Ingresa un correo válido.")
+        _err(400, "Ingresa un correo institucional terminado en .edu o .edu.xx.")
     usuario = db.scalar(select(Usuario).where(Usuario.correo_institucional == correo_n))
     # HU0003-2: la respuesta es idéntica exista o no la cuenta
     if usuario:

@@ -30,6 +30,7 @@ from ..models import (
 from ..schemas import BorradorIn, GenerarIn, RegenerarIn
 from ..services.esquemas import TIPOS, normalizar, verificar_conformidad
 from ..services.exportador import FORMATOS, ErrorExportacion, exportar
+from ..services.universidades import UNIVERSIDADES_PRIVADAS_LIMA
 from ..services.generacion import CABECERAS_SSE, crear_recurso_pendiente, generar_stream
 from ..services.html_util import html_a_texto, limpiar_html
 from ..services.llm import SinProveedoresError, adaptador
@@ -446,6 +447,7 @@ def _nombre_archivo(titulo: str, ext: str) -> str:
 
 @router.get("/{id_recurso}/exportar")
 def exportar_recurso(id_recurso: int, request: Request, formato: str = "pdf", membrete: bool = False, clave: bool = True,
+                     universidad: str = "upc",
                      usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
     r = obtener_recurso_propio(db, id_recurso, usuario)
     formato = formato.lower()
@@ -454,9 +456,17 @@ def exportar_recurso(id_recurso: int, request: Request, formato: str = "pdf", me
     secciones = (r.borrador.contenido or {}).get("secciones", [])
     if not secciones:
         _err(409, "El recurso aún no tiene contenido para exportar.")
+    universidad_info = UNIVERSIDADES_PRIVADAS_LIMA.get(universidad)
+    if not universidad_info:
+        _err(400, "La universidad seleccionada no está disponible.")
     try:
         datos, mime, ext = exportar(formato, r.titulo, secciones, membrete, incluir_ocultas=clave,
-                                    meta={"curso": r.curso.nombre if r.curso else "", "docente": usuario.nombre_completo})
+                                    meta={
+                                        "curso": r.curso.nombre if r.curso else "",
+                                        "docente": usuario.nombre_completo,
+                                        "universidad_clave": universidad,
+                                        "universidad_nombre": universidad_info["nombre"],
+                                    })
     except ErrorExportacion as e:  # HU0021-2
         _err(500, f"{e}. Puedes descargarlo en otro formato.", codigo="error_conversion",
              alternativas=[f for f in FORMATOS if f != formato])

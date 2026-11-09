@@ -64,3 +64,18 @@ def enviar_bienvenida(para: str, nombre: str) -> bool:
       <a href="{config.APP_URL}/login" style="background: #facc15; color: #0f172a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">Ir a EducaGen</a>
     </p>""")
     return enviar(para, "Bienvenida a EducaGen", texto, html)
+
+
+def enviar_verificacion(para: str, nombre: str, enlace: str) -> bool:
+    texto = (
+        f"Hola {nombre}:\n\nConfirma tu correo institucional para activar tu cuenta de EducaGen.\n"
+        f"Abre este enlace (vence en 24 horas y solo puede usarse una vez):\n\n{enlace}\n"
+    )
+    html = _plantilla("Confirma tu correo institucional", f"""
+    <p>Hola <strong>{nombre}</strong>:</p>
+    <p>Confirma tu correo institucional para activar tu cuenta de EducaGen.</p>
+    <p style="text-align: center; margin: 28px 0;">
+      <a href="{enlace}" style="background: #facc15; color: #0f172a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">Confirmar correo</a>
+    </p>
+    <p style="font-size: 13px; color: #475569;">El enlace vence en 24 horas y solo puede usarse una vez.</p>""")
+    return enviar(para, "Confirma tu correo de EducaGen", texto, html)

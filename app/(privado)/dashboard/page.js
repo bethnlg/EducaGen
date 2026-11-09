@@ -190,7 +190,7 @@ export default function Dashboard() {
                         {tipo === 'examen' && (
                             <label className="campo-claro corto">
                                 <span>N.º de preguntas</span>
-                                <input name="num_preguntas" type="number" min={1} max={50} value={form.num_preguntas} onChange={cambiar} />
+                                <input name="num_preguntas" type="number" min={1} max={20} value={form.num_preguntas} onChange={cambiar} />
                             </label>
                         )}
                         {tipo === 'caso' && (

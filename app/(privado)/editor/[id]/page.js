@@ -7,6 +7,7 @@ import { Modal, useApp } from '@/components/Shell';
 import Icono from '@/components/Icono';
 import { ApiError, api, descargar, streamSSE } from '@/lib/api';
 import { TIPOS, escaparHtml, fechaCompleta, haceCuanto, sanearHtml } from '@/lib/util';
+import { UNIVERSIDADES_PRIVADAS_LIMA, urlLogoRespaldo, urlLogoUniversidad } from '@/lib/universidades';
 
 const FORMATOS = [
     { clave: 'pdf', nombre: 'PDF', detalle: 'Para imprimir o subir al aula virtual' },
@@ -77,7 +78,7 @@ export default function EditorPage() {
     const [entrada, setEntrada] = useState('');
     const [respondiendo, setRespondiendo] = useState(false);
     const [menuExportar, setMenuExportar] = useState(false);
-    const [opcionesExportar, setOpcionesExportar] = useState({ membrete: true, clave: true });
+    const [opcionesExportar, setOpcionesExportar] = useState({ membrete: true, clave: true, universidad: 'upc' });
     const [exportando, setExportando] = useState(null);
     const [errorExportar, setErrorExportar] = useState(null);
     const [bloque, setBloque] = useState(null);
@@ -376,7 +377,12 @@ export default function EditorPage() {
         setErrorExportar(null);
         await guardar();
         try {
-            const q = new URLSearchParams({ formato, membrete: opcionesExportar.membrete, clave: opcionesExportar.clave });
+            const q = new URLSearchParams({
+                formato,
+                membrete: opcionesExportar.membrete,
+                clave: opcionesExportar.clave,
+                universidad: opcionesExportar.universidad,
+            });
             const nombre = await descargar(`/api/recursos/${id}/exportar?${q}`);
             avisar(`Descargado: ${nombre}`, 'exito');
             setMenuExportar(false);
@@ -490,6 +496,31 @@ export default function EditorPage() {
                                 {conformidad && !conformidad.conforme && (
                                     <p className="menu-nota">Faltan secciones obligatorias: {conformidad.faltantes.join(', ')}. Corrígelas antes de entregar el documento.</p>
                                 )}
+                                <label className="campo campo-exportar">
+                                    <span>Logo de universidad</span>
+                                    <select
+                                        value={opcionesExportar.universidad}
+                                        onChange={(e) => setOpcionesExportar((o) => ({ ...o, universidad: e.target.value }))}
+                                    >
+                                        {UNIVERSIDADES_PRIVADAS_LIMA.map((universidad) => (
+                                            <option key={universidad.clave} value={universidad.clave}>{universidad.nombre}</option>
+                                        ))}
+                                    </select>
+                                    <span className="logo-seleccionado">
+                                        <img
+                                            src={urlLogoUniversidad(UNIVERSIDADES_PRIVADAS_LIMA.find((u) => u.clave === opcionesExportar.universidad))}
+                                            alt={`Logo de ${UNIVERSIDADES_PRIVADAS_LIMA.find((u) => u.clave === opcionesExportar.universidad)?.nombre || 'la universidad seleccionada'}`}
+                                            width="24"
+                                            height="24"
+                                            onError={(e) => {
+                                                const universidad = UNIVERSIDADES_PRIVADAS_LIMA.find((u) => u.clave === opcionesExportar.universidad);
+                                                e.currentTarget.onerror = null;
+                                                e.currentTarget.src = urlLogoRespaldo(universidad);
+                                            }}
+                                        />
+                                        Se incluirá en el membrete del archivo.
+                                    </span>
+                                </label>
                                 {FORMATOS.map((f) => (
                                     <button key={f.clave} type="button" role="menuitem" className="menu-opcion" onClick={() => exportar(f.clave)} disabled={!!exportando}>
                                         <strong>{f.nombre}</strong>

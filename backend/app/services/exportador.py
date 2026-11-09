@@ -10,9 +10,11 @@ import io
 from datetime import datetime
 from html import escape
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 from ..config import config
 from .html_util import html_a_bloques, runs_a_texto
+from .universidades import UNIVERSIDADES_PRIVADAS_LIMA
 
 FORMATOS = {
     "pdf": ("application/pdf", "pdf"),
@@ -29,9 +31,44 @@ class ErrorExportacion(Exception):
     pass
 
 
-def _logo() -> Path | None:
+def _logo(clave: str | None = None) -> Path | None:
+    """Obtiene el logo seleccionado y conserva el membrete predeterminado como respaldo."""
+    if clave in UNIVERSIDADES_PRIVADAS_LIMA:
+        cache = config.STORAGE_DIR / "logos" / f"{clave}-v2.png"
+        if not cache.is_file():
+            try:
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                dominio = UNIVERSIDADES_PRIVADAS_LIMA[clave]["dominio"]
+                urls = [
+                    UNIVERSIDADES_PRIVADAS_LIMA[clave]["logo_url"],
+                    f"https://www.google.com/s2/favicons?domain={dominio}&sz=128",
+                ]
+                datos = None
+                for url in urls:
+                    try:
+                        solicitud = Request(url, headers={"User-Agent": "EducaGen/1.0"})
+                        with urlopen(solicitud, timeout=4) as respuesta:
+                            datos = respuesta.read(2 * 1024 * 1024)
+                        if datos:
+                            break
+                    except Exception:
+                        continue
+                if not datos:
+                    raise ValueError("No se pudo recuperar el logo institucional")
+                from PIL import Image
+
+                imagen = Image.open(io.BytesIO(datos))
+                imagen.convert("RGBA").save(cache, format="PNG")
+            except Exception:
+                pass
+        if cache.is_file():
+            return cache
     ruta = Path(config.MEMBRETE_LOGO)
     return ruta if ruta.is_file() else None
+
+
+def _universidad(meta: dict) -> str:
+    return meta.get("universidad_nombre") or config.UNIVERSIDAD_NOMBRE
 
 
 def _secciones_visibles(secciones, incluir_ocultas):
@@ -138,7 +175,7 @@ def _pdf(titulo, secciones, membrete, meta) -> bytes:
                 tabla.setStyle(TableStyle(estilo))
                 historia += [Spacer(1, 4), tabla, Spacer(1, 8)]
 
-    logo = _logo() if membrete else None
+    logo = _logo(meta.get("universidad_clave")) if membrete else None
 
     def encabezado(canvas, _doc):
         canvas.saveState()
@@ -153,7 +190,7 @@ def _pdf(titulo, secciones, membrete, meta) -> bytes:
                     pass
             canvas.setFont("Helvetica-Bold", 10)
             canvas.setFillColor(colors.HexColor("#0f172a"))
-            canvas.drawString(x, y, config.UNIVERSIDAD_NOMBRE)
+            canvas.drawString(x, y, _universidad(meta))
             canvas.setFont("Helvetica", 8)
             canvas.setFillColor(colors.HexColor("#475569"))
             canvas.drawString(x, y - 0.4 * cm, meta.get("curso") or "")
@@ -192,14 +229,14 @@ def _docx(titulo, secciones, membrete, meta) -> bytes:
     if membrete:
         cab = sec.header
         p = cab.paragraphs[0]
-        logo = _logo()
+        logo = _logo(meta.get("universidad_clave"))
         if logo:
             try:
                 p.add_run().add_picture(str(logo), height=Cm(0.9))
                 p.add_run("   ")
             except Exception:
                 pass
-        r = p.add_run(config.UNIVERSIDAD_NOMBRE)
+        r = p.add_run(_universidad(meta))
         r.bold = True
         r.font.size = Pt(10)
         if meta.get("curso"):
@@ -301,7 +338,7 @@ def _xlsx(titulo, secciones, membrete, meta) -> bytes:
         fila += 1
 
     if membrete:
-        logo = _logo()
+        logo = _logo(meta.get("universidad_clave"))
         if logo:
             try:
                 from openpyxl.drawing.image import Image as XLImage
@@ -311,12 +348,12 @@ def _xlsx(titulo, secciones, membrete, meta) -> bytes:
                 img.height, img.width = 36, int(img.width * proporcion)
                 ws.add_image(img, "A1")
                 ws.row_dimensions[1].height = 30
-                ws.cell(row=1, column=2, value=config.UNIVERSIDAD_NOMBRE).font = Font(bold=True, size=12)
+                ws.cell(row=1, column=2, value=_universidad(meta)).font = Font(bold=True, size=12)
                 fila = 2
             except Exception:
-                fila_texto(config.UNIVERSIDAD_NOMBRE, Font(bold=True, size=12))
+                fila_texto(_universidad(meta), Font(bold=True, size=12))
         else:
-            fila_texto(config.UNIVERSIDAD_NOMBRE, Font(bold=True, size=12))
+            fila_texto(_universidad(meta), Font(bold=True, size=12))
 
     fila_texto(titulo, Font(bold=True, size=15), alto=24)
     linea_meta = " | ".join(x for x in [meta.get("curso"), meta.get("docente"), datetime.now().strftime("%d/%m/%Y")] if x)
@@ -365,11 +402,11 @@ def _xlsx(titulo, secciones, membrete, meta) -> bytes:
 def _html(titulo, secciones, membrete, meta) -> bytes:
     cab = ""
     if membrete:
-        logo = _logo()
+        logo = _logo(meta.get("universidad_clave"))
         img = ""
         if logo:
             img = f'<img src="data:image/png;base64,{base64.b64encode(logo.read_bytes()).decode()}" alt="" style="height:40px">'
-        cab = f'<header class="membrete">{img}<div><strong>{escape(config.UNIVERSIDAD_NOMBRE)}</strong><br><small>{escape(meta.get("curso") or "")}</small></div></header>'
+        cab = f'<header class="membrete">{img}<div><strong>{escape(_universidad(meta))}</strong><br><small>{escape(meta.get("curso") or "")}</small></div></header>'
     cuerpo = "".join(f"<section><h2>{escape(s.get('titulo', ''))}</h2>{s.get('html', '')}</section>" for s in secciones)
     linea_meta = " | ".join(x for x in [meta.get("curso"), meta.get("docente"), datetime.now().strftime("%d/%m/%Y")] if x)
     html = f"""<!DOCTYPE html>
@@ -390,7 +427,8 @@ th {{ background: #{AZUL}; color: #fff; }}
 def _txt(titulo, secciones, membrete, meta) -> bytes:
     lineas = []
     if membrete:
-        lineas += [config.UNIVERSIDAD_NOMBRE.upper(), "=" * len(config.UNIVERSIDAD_NOMBRE), ""]
+        nombre_universidad = _universidad(meta)
+        lineas += [nombre_universidad.upper(), "=" * len(nombre_universidad), ""]
     lineas += [titulo, "=" * len(titulo)]
     linea_meta = " | ".join(x for x in [meta.get("curso"), meta.get("docente"), datetime.now().strftime("%d/%m/%Y")] if x)
     lineas += [linea_meta, ""]

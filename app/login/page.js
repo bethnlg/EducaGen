@@ -3,10 +3,10 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { EMAIL_INSTITUCIONAL_RE } from '@/lib/validacion';
 import PanelMarca from './PanelMarca';
 
 const VACIO = { nombre: '', correo: '', contrasena: '' };
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function Formulario() {
     const router = useRouter();
@@ -18,6 +18,7 @@ function Formulario() {
     const [cargando, setCargando] = useState(false);
     const [verPass, setVerPass] = useState(false);
     const [enviado, setEnviado] = useState(false);
+    const [verificacion, setVerificacion] = useState('');
 
     const esLogin = modo === 'login';
 
@@ -26,6 +27,7 @@ function Formulario() {
         setError('');
         setInvalidos([]);
         setEnviado(false);
+        setVerificacion('');
         setForm((f) => ({ ...VACIO, correo: f.correo }));
     }
 
@@ -44,9 +46,9 @@ function Formulario() {
             setError('Completa todos los campos.');
             return;
         }
-        if (!EMAIL_RE.test(form.correo.trim())) {
+        if (!EMAIL_INSTITUCIONAL_RE.test(form.correo.trim())) {
             setInvalidos(['correo']);
-            setError('Ingresa un correo institucional válido.');
+            setError('Ingresa un correo institucional terminado en .edu o .edu.xx.');
             return;
         }
         if (modo === 'registro' && form.contrasena.length < 8) {
@@ -62,7 +64,11 @@ function Formulario() {
                 setEnviado(true);
                 return;
             }
-            await api(esLogin ? '/api/auth/login' : '/api/auth/register', { method: 'POST', body: form });
+            const respuesta = await api(esLogin ? '/api/auth/login' : '/api/auth/register', { method: 'POST', body: form });
+            if (!esLogin && respuesta.requiere_verificacion) {
+                setVerificacion(`Enviamos un enlace de confirmación a ${respuesta.correo}. Revisa tu bandeja de entrada y spam.`);
+                return;
+            }
             router.push(volver && volver.startsWith('/') ? volver : '/dashboard');
             router.refresh();
         } catch (err) {
@@ -132,6 +138,7 @@ function Formulario() {
                 </label>
 
                 {error && <p className="error" role="alert">{error}</p>}
+                {verificacion && <div className="exito" role="status">{verificacion}</div>}
 
                 <button type="submit" className="boton boton-amarillo boton-ancho" disabled={cargando}>
                     {cargando ? 'Un momento…' : esLogin ? 'Ingresar' : 'Crear cuenta'}
