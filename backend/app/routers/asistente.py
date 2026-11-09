@@ -20,9 +20,8 @@ from .recursos import _limpiar_secciones, guardar_contenido
 
 router = APIRouter(prefix="/api/recursos", tags=["asistente"])
 
-
-def _err(codigo: int, mensaje: str, **extra):
-    raise HTTPException(codigo, detail={"mensaje": mensaje, **extra})
+def _err(estado: int, mensaje: str, **extra):
+    raise HTTPException(estado, detail={"mensaje": mensaje, **extra})
 
 
 @router.post("/{id_recurso}/asistente")

@@ -13,6 +13,7 @@ function cifra(valor, sufijo = '') {
     return valor === null || valor === undefined ? '—' : `${valor}${sufijo}`;
 }
 
+
 export default function PanelCalidad() {
     const { avisar } = useApp();
     const [datos, setDatos] = useState(null);

@@ -38,9 +38,12 @@ class Config:
 
     # Proveedores de LLM (RT-06): Gemini principal, Claude respaldo
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
     CLAUDE_API_KEY: str = os.getenv("CLAUDE_API_KEY", os.getenv("ANTHROPIC_API_KEY", ""))
     CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "claude-sonnet-5-5")
+    LLAMA_API_KEY: str = os.getenv("LLAMA_API_KEY", os.getenv("GROQ_API_KEY", ""))
+    LLAMA_MODEL: str = os.getenv("LLAMA_MODEL", "openai/gpt-oss-120b")
+    LLAMA_URL: str = os.getenv("LLAMA_URL", "https://api.groq.com/openai/v1/chat/completions")
     # "auto": usa las claves disponibles; "demo": generador local sin IA externa
     LLM_MODO: str = os.getenv("LLM_MODO", "auto").lower()
     LLM_TIMEOUT_SEG: float = float(os.getenv("LLM_TIMEOUT_SEG", "60"))

@@ -137,7 +137,9 @@ def _tabla(encabezados, filas) -> str:
 
 def _seccion(clave, titulo, html, **extra) -> dict:
     return {"id": _id(), "clave": clave, "titulo": titulo, "html": html, **extra}
-
+def _sin_letra(texto) -> str:
+    """Quita la letra inicial que a veces agrega la IA (ej. 'A) ', 'b. ') para no duplicarla."""
+    return re.sub(r"^\s*[A-Ga-g]\s*[\).:-]\s*", "", str(texto))
 
 def json_a_secciones(tipo: str, d: dict) -> list[dict]:
     """Convierte la salida estructurada del LLM en secciones editables."""
@@ -193,7 +195,7 @@ def json_a_secciones(tipo: str, d: dict) -> list[dict]:
         letras = "ABCDEFG"
         html_om = ""
         for i, q in enumerate(om, 1):
-            opciones = "".join(f"<li>{letras[j]}) {escape(str(o))}</li>" for j, o in enumerate(q.get("opciones") or []))
+            opciones = "".join(f"<li>{letras[j]}) {escape(_sin_letra(o))}</li>" for j, o in enumerate(q.get("opciones") or []))
             html_om += f"<p><strong>{i}. {escape(str(q.get('enunciado', '')))}</strong> ({escape(str(q.get('puntaje', 1)))} pts)</p><ul>{opciones}</ul>"
         inicio = len(om)
         html_de = "".join(

@@ -131,3 +131,64 @@ class ClaudeProveedor(Proveedor):
         if not texto_total:
             raise ProveedorError("Claude devolvió una respuesta vacía.")
         uso.tokens_salida = uso.tokens_salida or estimar_tokens(texto_total)
+
+class LlamaProveedor(Proveedor):
+    """Llama 3 mediante una API compatible con OpenAI (Groq en la nube u Ollama local)."""
+
+    nombre = "llama"
+
+    def __init__(self):
+        self.modelo = config.LLAMA_MODEL
+        self.url = config.LLAMA_URL
+
+    def disponible(self) -> bool:
+        return bool(config.LLAMA_API_KEY)
+
+    async def stream(self, sol: Solicitud, uso: Uso) -> AsyncIterator[str]:
+        sistema = sol.sistema
+        if sol.json:
+            sistema += "\nResponde únicamente con el objeto JSON, sin texto adicional ni bloques de código."
+        cuerpo = {
+            "model": self.modelo,
+            "max_tokens": sol.max_tokens,
+            "temperature": sol.temperatura,
+            "messages": [
+                {"role": "system", "content": sistema},
+                {"role": "user", "content": sol.prompt},
+            ],
+            "stream": True,
+        }
+        if sol.json:
+            cuerpo["response_format"] = {"type": "json_object"}
+        cabeceras = {
+            "Authorization": f"Bearer {config.LLAMA_API_KEY}",
+            "Content-Type": "application/json",
+        }
+        uso.proveedor, uso.modelo = self.nombre, self.modelo
+        texto_total = ""
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(config.LLM_TIMEOUT_SEG, connect=10)) as cliente:
+                async with cliente.stream("POST", self.url, json=cuerpo, headers=cabeceras) as r:
+                    if r.status_code != 200:
+                        raise _error_http(r.status_code, (await r.aread()).decode("utf-8", "ignore"), "Llama")
+                    async for datos in _lineas_sse(r):
+                        try:
+                            evento = json.loads(datos)
+                        except json.JSONDecodeError:
+                            continue
+                        for opcion in evento.get("choices") or []:
+                            texto = (opcion.get("delta") or {}).get("content")
+                            if texto:
+                                texto_total += texto
+                                yield texto
+                        consumo = evento.get("usage") or (evento.get("x_groq") or {}).get("usage")
+                        if consumo:
+                            uso.tokens_entrada = consumo.get("prompt_tokens", uso.tokens_entrada)
+                            uso.tokens_salida = consumo.get("completion_tokens", uso.tokens_salida)
+        except httpx.TimeoutException as e:
+            raise ProveedorError(f"Llama superó el tiempo de espera: {e}") from e
+        except httpx.HTTPError as e:
+            raise ProveedorError(f"Llama no está disponible: {e}") from e
+        if not texto_total:
+            raise ProveedorError("Llama devolvió una respuesta vacía.")
+        uso.tokens_salida = uso.tokens_salida or estimar_tokens(texto_total)

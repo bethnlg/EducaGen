@@ -15,7 +15,7 @@ from typing import AsyncIterator
 from ...config import config
 from .base import Proveedor, ProveedorError, SinProveedoresError, Solicitud, Uso
 from .demo import DemoProveedor
-from .proveedores import ClaudeProveedor, GeminiProveedor
+from .proveedores import GeminiProveedor, LlamaProveedor
 
 log = logging.getLogger("educagen.llm")
 
@@ -64,14 +64,14 @@ class AdaptadorLLM:
         self.circuito = InterruptorCircuito(config.CIRCUITO_FALLAS, config.CIRCUITO_ESPERA_SEG)
 
     def _proveedores(self) -> tuple[Proveedor | None, Proveedor | None]:
-        gemini, claude = GeminiProveedor(), ClaudeProveedor()
-        modo_demo = config.LLM_MODO == "demo" or not (gemini.disponible() or claude.disponible())
+        gemini, llama = GeminiProveedor(), LlamaProveedor()
+        modo_demo = config.LLM_MODO == "demo" or not (gemini.disponible() or llama.disponible())
         if modo_demo:
             principal = DemoProveedor("gemini-demo", fallar=config.LLM_SIMULAR_FALLA_PRINCIPAL or config.LLM_SIMULAR_FALLA_TOTAL)
-            respaldo = DemoProveedor("claude-demo", fallar=config.LLM_SIMULAR_FALLA_TOTAL)
+            respaldo = DemoProveedor("llama-demo", fallar=config.LLM_SIMULAR_FALLA_TOTAL)
             return principal, respaldo
-        principal = gemini if gemini.disponible() else None
-        respaldo = claude if claude.disponible() else None
+        principal = llama if llama.disponible() else None
+        respaldo = gemini if gemini.disponible() else None
         if principal is None:
             principal, respaldo = respaldo, None
         return principal, respaldo

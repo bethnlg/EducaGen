@@ -43,8 +43,8 @@ SECTORES = ["Retail", "Banca y finanzas", "Salud", "Tecnología", "Educación", 
 NIVELES_DEFECTO = ["Excelente", "Bueno", "En proceso", "Inicial"]
 
 
-def _err(codigo: int, mensaje: str, **extra):
-    raise HTTPException(codigo, detail={"mensaje": mensaje, **extra})
+def _err(estado: int, mensaje: str, **extra):
+    raise HTTPException(estado, detail={"mensaje": mensaje, **extra})
 
 
 def _ahora():
