@@ -177,6 +177,20 @@ class ArchivoExportado(Base):
     fecha_exportacion: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)
 
 
+class ArchivoAdjunto(Base):
+    __tablename__ = "archivo_adjunto"
+    id_archivo: Mapped[str] = mapped_column(String(80), primary_key=True)
+    id_usuario: Mapped[int] = mapped_column(ForeignKey("usuario.id_usuario", ondelete="CASCADE"), index=True)
+    id_recurso: Mapped[Optional[int]] = mapped_column(ForeignKey("recurso_educativo.id_recurso", ondelete="CASCADE"), index=True)
+    nombre: Mapped[str] = mapped_column(String(200))
+    tipo: Mapped[str] = mapped_column(String(150), default="application/octet-stream")
+    tamano: Mapped[int] = mapped_column(Integer)
+    ruta: Mapped[str] = mapped_column(String(500))
+    texto: Mapped[str] = mapped_column(Text, default="")
+    texto_extraido: Mapped[bool] = mapped_column(Boolean, default=False)
+    fecha_carga: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)
+
+
 class MaterialModelo(Base):
     __tablename__ = "material_modelo"
     id_material: Mapped[int] = mapped_column(Integer, primary_key=True)

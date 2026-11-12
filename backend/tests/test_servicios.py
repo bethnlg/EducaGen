@@ -3,6 +3,7 @@ import json
 
 from app.services import esquemas, exportador, html_util, metricas
 from app.services.llm.demo import generar_recurso, responder_asistente
+from app.services.prompts import prompt_asistente, prompt_generacion
 
 PARAMS = {
     "silabo": {"curso": "Algoritmos", "temas": ["recursividad", "árboles", "grafos"], "semanas": 16},
@@ -66,3 +67,11 @@ def test_bibliografia_marcada_por_verificar():  # HU0014
     secciones = esquemas.json_a_secciones("silabo", generar_recurso("silabo", PARAMS["silabo"]))
     respuesta = responder_asistente({"mensaje": "Agrega bibliografía APA", "secciones": secciones, "curso": "Algoritmos"})
     assert "por verificar" in respuesta and '"bibliografia"' in respuesta
+
+
+def test_archivos_se_incluyen_como_contexto_del_prompt():
+    adjunto = {"id": "a1", "nombre": "guia.txt", "tipo": "text/plain", "tamano": 10, "texto": "Regla institucional de evaluación"}
+    solicitud = prompt_generacion("examen", {**PARAMS["examen"], "adjuntos": [adjunto]}, [], None)
+    assert "guia.txt" in solicitud.prompt and "Regla institucional" in solicitud.prompt
+    asistente = prompt_asistente("examen", "Examen", [], "Usa la guía", [], [], "Bases de Datos", [adjunto])
+    assert "guia.txt" in asistente.prompt and "Regla institucional" in asistente.prompt

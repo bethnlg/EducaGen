@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Modal, useApp } from '@/components/Shell';
 import Icono from '@/components/Icono';
-import { ApiError, api, descargar, streamSSE } from '@/lib/api';
+import { ApiError, api, descargar, streamSSE, subirArchivo } from '@/lib/api';
 import { TIPOS, escaparHtml, fechaCompleta, haceCuanto, sanearHtml } from '@/lib/util';
 import { UNIVERSIDADES_PRIVADAS_LIMA, urlLogoRespaldo, urlLogoUniversidad } from '@/lib/universidades';
 
@@ -67,6 +67,11 @@ export default function EditorPage() {
     const { avisar } = useApp();
 
     const [recurso, setRecurso] = useState(null);
+    const [titulo, setTitulo] = useState('');
+    const [guardandoTitulo, setGuardandoTitulo] = useState(false);
+    const [versiones, setVersiones] = useState(null);
+    const [mostrandoVersiones, setMostrandoVersiones] = useState(false);
+    const [restaurandoVersion, setRestaurandoVersion] = useState(null);
     const [error, setError] = useState(null);
     const [secciones, setSecciones] = useState([]);
     const [revision, setRevision] = useState({});
@@ -76,6 +81,8 @@ export default function EditorPage() {
     const [avisosIniciales, setAvisosIniciales] = useState([]);
     const [mensajes, setMensajes] = useState([]);
     const [entrada, setEntrada] = useState('');
+    const [adjuntos, setAdjuntos] = useState([]);
+    const [subiendoAdjunto, setSubiendoAdjunto] = useState(false);
     const [respondiendo, setRespondiendo] = useState(false);
     const [menuExportar, setMenuExportar] = useState(false);
     const [opcionesExportar, setOpcionesExportar] = useState({ membrete: true, clave: true, universidad: 'upc' });
@@ -122,6 +129,8 @@ export default function EditorPage() {
                 /* copia local dañada */
             }
             setRecurso(d);
+            setTitulo(d.titulo || '');
+            setAdjuntos((d.adjuntos || []).map((a) => ({ ...a, texto: '' })));
             setSecciones(secs);
             seccionesRef.current = secs;
             setConformidad(d.conformidad_detalle);
@@ -250,6 +259,53 @@ export default function EditorPage() {
         if (el) alCambiarCuerpo(idSeccion, el.innerHTML);
     }
 
+    async function guardarTitulo() {
+        const nuevo = titulo.trim();
+        if (!nuevo || nuevo === recurso.titulo) {
+            setTitulo(recurso.titulo);
+            return;
+        }
+        setGuardandoTitulo(true);
+        try {
+            const r = await api(`/api/recursos/${id}/borrador`, { method: 'PUT', body: { titulo: nuevo } });
+            setRecurso((actual) => ({ ...actual, titulo: nuevo }));
+            setTitulo(nuevo);
+            setGuardado({ estado: 'guardado', fecha: new Date(r.fecha_guardado).getTime() });
+            avisar('Título actualizado.', 'exito');
+        } catch (err) {
+            setTitulo(recurso.titulo);
+            avisar(err.message, 'error');
+        } finally {
+            setGuardandoTitulo(false);
+        }
+    }
+
+    async function abrirVersiones() {
+        try {
+            setVersiones((await api(`/api/recursos/${id}/versiones`)).versiones);
+            setMostrandoVersiones(true);
+        } catch (err) {
+            avisar(err.message, 'error');
+        }
+    }
+
+    async function restaurarVersion(version) {
+        setRestaurandoVersion(version.id);
+        try {
+            const r = await api(`/api/recursos/${id}/versiones/${version.id}/restaurar`, { method: 'POST' });
+            reemplazarSecciones(r.contenido.secciones);
+            setConformidad(r.conformidad);
+            setRecurso((actual) => ({ ...actual, estado: r.estado }));
+            setGuardado({ estado: 'guardado', fecha: new Date(r.fecha_guardado).getTime() });
+            setMostrandoVersiones(false);
+            avisar(`Se restauró la versión ${version.numero}.`, 'exito');
+        } catch (err) {
+            avisar(err.message, 'error');
+        } finally {
+            setRestaurandoVersion(null);
+        }
+    }
+
     function formato(comando, valor) {
         document.execCommand(comando, false, valor);
         const sel = window.getSelection();
@@ -337,7 +393,7 @@ export default function EditorPage() {
         setRespondiendo(true);
         const actualizar = (cambios) => setMensajes((m) => m.map((x) => (x.id === idLocal ? { ...x, ...cambios(x) } : x)));
         try {
-            await streamSSE(`/api/recursos/${id}/asistente`, { mensaje, secciones: seccionesRef.current }, {
+            await streamSSE(`/api/recursos/${id}/asistente`, { mensaje, secciones: seccionesRef.current, adjuntos }, {
                 onEvento: (ev) => {
                     if (ev.tipo === 'chunk') actualizar((x) => ({ contenido: x.contenido + ev.texto }));
                     else if (ev.tipo === 'reinicio') actualizar(() => ({ contenido: '' }));
@@ -350,6 +406,36 @@ export default function EditorPage() {
             actualizar((x) => ({ escribiendo: false, error: true, reintentable: true, pedido: mensaje, nota: err.message, contenido: x.contenido }));
         } finally {
             setRespondiendo(false);
+        }
+    }
+
+    async function seleccionarAdjuntos(e) {
+        const archivos = Array.from(e.target.files || []);
+        e.target.value = '';
+        if (!archivos.length) return;
+        if (adjuntos.length + archivos.length > 5) {
+            avisar('Puedes adjuntar hasta 5 archivos por consulta.', 'aviso');
+            return;
+        }
+
+        async function quitarAdjunto(adjunto) {
+            try {
+                await api(`/api/recursos/${id}/archivos/${adjunto.id}`, { method: 'DELETE' });
+                setAdjuntos((lista) => lista.filter((a) => a.id !== adjunto.id));
+                avisar(`Se quitó «${adjunto.nombre}».`, 'exito');
+            } catch (err) {
+                avisar(err.message, 'error');
+            }
+        }
+        setSubiendoAdjunto(true);
+        try {
+            const cargados = [];
+            for (const archivo of archivos) cargados.push(await subirArchivo(archivo));
+            setAdjuntos((lista) => [...lista, ...cargados]);
+        } catch (err) {
+            avisar(err.message, 'error');
+        } finally {
+            setSubiendoAdjunto(false);
         }
     }
 
@@ -469,7 +555,12 @@ export default function EditorPage() {
         <div className="editor">
             <header className="editor-cabecera">
                 <div className="editor-titulo">
-                    <h1 title={recurso.titulo}>{recurso.titulo}</h1>
+                    <div className="titulo-editable">
+                        <input value={titulo} maxLength={200} onChange={(e) => setTitulo(e.target.value)}
+                            onBlur={guardarTitulo} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
+                            aria-label="Título del recurso" disabled={guardandoTitulo} />
+                        <small>Haz clic para editar</small>
+                    </div>
                     {conformidad && !pendiente && (
                         conformidad.conforme
                             ? <span className="insignia insignia-ok"><Icono nombre="checkCirculo" tam={15} /> 100 % conforme</span>
@@ -480,6 +571,9 @@ export default function EditorPage() {
                     <span className={`estado-guardado estado-${guardado.estado}`}>
                         {aprobado ? `Aprobado el ${fechaCompleta(recurso.fecha_aprobacion)}` : textoGuardado}
                     </span>
+                    <button type="button" className="boton boton-secundario" onClick={abrirVersiones} disabled={pendiente}>
+                        Versiones
+                    </button>
                     {!pendiente && (aprobado ? (
                         <span className="boton boton-aprobado" aria-live="polite"><Icono nombre="check" tam={16} /> Aprobado</span>
                     ) : (
@@ -687,10 +781,21 @@ export default function EditorPage() {
                     </div>
                     <form className="chat-entrada" onSubmit={(e) => { e.preventDefault(); enviarAlAsistente(); }}>
                         <input value={entrada} onChange={(e) => setEntrada(e.target.value)} placeholder="Pide un cambio por chat…" maxLength={2000} disabled={pendiente} aria-label="Mensaje para el asistente" />
+                        <label className="boton-adjunto" title="Añadir archivo de referencia">
+                            <span aria-hidden="true">+</span>
+                            <input type="file" className="solo-lector" multiple onChange={seleccionarAdjuntos} disabled={subiendoAdjunto || pendiente || adjuntos.length >= 5} />
+                        </label>
                         <button type="submit" className="boton-enviar" disabled={!entrada.trim() || respondiendo} aria-label="Enviar">
                             <Icono nombre="enviar" tam={16} />
                         </button>
                     </form>
+                    {adjuntos.length > 0 && <ul className="lista-adjuntos lista-adjuntos-chat">
+                        {adjuntos.map((archivo) => (
+                            <li key={archivo.id}><span title={archivo.nombre}>{archivo.nombre}</span>
+                                <button type="button" className="boton-texto" onClick={() => quitarAdjunto(archivo)}>Quitar</button>
+                            </li>
+                        ))}
+                    </ul>}
                 </aside>
             </div>
 
@@ -743,6 +848,32 @@ export default function EditorPage() {
                         Al confirmar, el recurso pasa al estado <strong>Aprobado</strong>, se registra la fecha de aprobación y se detiene la medición del tiempo de elaboración.
                         Podrás seguir exportándolo; cualquier cambio posterior generará una nueva versión.
                     </p>
+                </Modal>
+            )}
+
+            {mostrandoVersiones && (
+                <Modal
+                    titulo="Historial de versiones"
+                    subtitulo="Puedes recuperar una versión anterior; el documento quedará como borrador para revisarlo."
+                    onCerrar={() => setMostrandoVersiones(false)}
+                    ancho={620}
+                >
+                    {versiones?.length ? (
+                        <ul className="lista-versiones">
+                            {versiones.map((version) => (
+                                <li key={version.id}>
+                                    <div>
+                                        <strong>Versión {version.numero}</strong>
+                                        <small>{version.origen === 'docente' ? 'Aprobada por ti' : 'Generada por IA'} · {fechaCompleta(version.fecha)}</small>
+                                    </div>
+                                    <button type="button" className="boton boton-secundario boton-pequeno"
+                                        onClick={() => restaurarVersion(version)} disabled={restaurandoVersion !== null}>
+                                        {restaurandoVersion === version.id ? 'Restaurando…' : 'Restaurar'}
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : <p className="texto-suave">Todavía no hay versiones guardadas.</p>}
                 </Modal>
             )}
         </div>

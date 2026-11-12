@@ -74,6 +74,14 @@ def test_datos_obligatorios(cliente):  # HU0005-2
     assert r.status_code == 422 and set(r.json()["detail"]["campos"]) == {"curso", "temas"}
 
 
+def test_cargar_archivo_de_referencia(cliente, monkeypatch, tmp_path):
+    monkeypatch.setattr("app.routers.recursos.config.STORAGE_DIR", tmp_path)
+    r = cliente.post("/api/recursos/archivos", files={"archivo": ("guia.txt", b"Regla de evaluacion", "text/plain")})
+    assert r.status_code == 200
+    assert r.json()["nombre"] == "guia.txt"
+    assert "Regla de evaluacion" in r.json()["texto"]
+
+
 def test_pesos_rubrica(cliente):  # HU0007-2
     r = cliente.post("/api/recursos/generar", json={"tipo": "rubrica", "curso": "Comunicación", "temas": "Redacción 30, Análisis 30"})
     assert r.status_code == 409 and r.json()["detail"]["codigo"] == "pesos_no_suman"
@@ -104,6 +112,9 @@ def test_flujo_completo(cliente):
     vista = cliente.get(f"/api/recursos/{rid}/aprobacion").json()
     assert vista["porcentaje_editado"] > 0
     assert cliente.post(f"/api/recursos/{rid}/aprobar").json()["estado"] == "aprobado"
+    versiones = cliente.get(f"/api/recursos/{rid}/versiones").json()["versiones"]
+    assert versiones and versiones[0]["origen"] in ("ia", "docente")
+    assert cliente.post(f"/api/recursos/{rid}/versiones/{versiones[0]['id']}/restaurar").status_code == 200
 
     # Exportación (HU0021)
     r = cliente.get(f"/api/recursos/{rid}/exportar", params={"formato": "docx", "membrete": True})

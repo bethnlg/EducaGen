@@ -4,6 +4,14 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+class ArchivoAdjuntoIn(BaseModel):
+    id: str = Field(min_length=1, max_length=80)
+    nombre: str = Field(min_length=1, max_length=200)
+    tipo: str = Field(default="application/octet-stream", max_length=150)
+    tamano: int = Field(ge=0)
+    texto: str = Field(default="", max_length=12000)
+
+
 class RegistroIn(BaseModel):
     nombre: str = Field(default="", max_length=200)
     correo: str = Field(default="", max_length=150)
@@ -37,6 +45,7 @@ class GenerarIn(BaseModel):
     sector: Optional[str] = Field(default=None, max_length=80)
     forzar: bool = False
     aceptar_propuesta: bool = False
+    adjuntos: list[ArchivoAdjuntoIn] = Field(default_factory=list, max_length=5)
 
 
 class BorradorIn(BaseModel):
@@ -55,6 +64,7 @@ class RegenerarIn(BaseModel):
 class AsistenteIn(BaseModel):
     mensaje: str = Field(default="", max_length=2000)
     secciones: Optional[list[dict]] = None
+    adjuntos: list[ArchivoAdjuntoIn] = Field(default_factory=list, max_length=5)
 
 
 class AplicarIn(BaseModel):

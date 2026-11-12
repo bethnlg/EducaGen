@@ -13,6 +13,7 @@ La implementación sigue el documento de arquitectura del Objetivo 2 y el Produc
 | IA | Gemini (principal) y Claude (respaldo), con reintentos e interruptor de circuito | `backend/app/services/llm/` |
 | Streaming | Server-Sent Events | `backend/app/services/generacion.py`, `routers/asistente.py` |
 | RAG | Banco de materiales modelo con búsqueda de texto completo | `backend/app/services/prompts.py`, `seed.py` |
+| Archivos de referencia | Adjuntos de cualquier formato; extracción de texto para PDF, Word, Excel y texto | `routers/recursos.py`, `services/prompts.py` |
 | Exportación | PDF, Word, Excel, HTML y TXT con membrete | `backend/app/services/exportador.py` |
 
 ## Puesta en marcha
@@ -50,6 +51,8 @@ Abre http://localhost:3000. Next.js reenvía las rutas `/api/*` a la API (ver `n
 
 Al exportar un recurso, el menú permite elegir el membrete de una universidad privada con presencia en Lima. La selección se envía a la API y el logo se almacena en caché para PDF, Word, Excel y HTML; si no se puede recuperar, se conserva el nombre de la universidad y el membrete configurado como respaldo.
 
+En el Dashboard y en el asistente del Editor se pueden adjuntar hasta 5 archivos de referencia de cualquier formato, con un máximo de 10 MB por archivo. Los formatos PDF, Word, Excel y texto se extraen como contexto para la IA; los formatos binarios se conservan como referencia, pero no se envían como instrucciones al modelo.
+
 ### 3. Claves de IA
 
 Sin claves la aplicación funciona en **modo demostración** (plantillas locales con el mismo flujo de streaming, validación y reintentos). Para usar los modelos reales agrega en `backend/.env`:
@@ -82,7 +85,7 @@ pytest -q
 | HU0010 Materiales modelo (RAG) | `services/prompts.py` → `recuperar_materiales` |
 | HU0011 Regenerar selección (máx. 5) | Editor + `POST /api/recursos/{id}/regenerar` |
 | HU0012-HU0014 Asistente, streaming, bibliografía APA | Editor + `routers/asistente.py` |
-| HU0015-HU0016 Edición manual y autoguardado (con copia sin conexión) | `app/(privado)/editor/[id]` |
+| HU0015-HU0016 Edición manual, título, versiones y autoguardado (con copia sin conexión) | `app/(privado)/editor/[id]`, `routers/recursos.py` |
 | HU0017-HU0020 Historial, búsqueda, duplicar, papelera 30 días | `app/(privado)/historial` |
 | HU0021-HU0023 Exportar con formato, membrete y logo universitario | `services/exportador.py`, `services/universidades.py`, `lib/universidades.js` |
 | HU0024 Indicador de conformidad | `services/esquemas.py` → `verificar_conformidad` |

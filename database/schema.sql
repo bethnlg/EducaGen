@@ -120,6 +120,21 @@ CREATE TABLE IF NOT EXISTS archivo_exportado (
     fecha_exportacion        TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS archivo_adjunto (
+    id_archivo       VARCHAR(80) PRIMARY KEY,
+    id_usuario       INTEGER NOT NULL REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+    id_recurso       INTEGER REFERENCES recurso_educativo(id_recurso) ON DELETE CASCADE,
+    nombre           VARCHAR(200) NOT NULL,
+    tipo             VARCHAR(150) NOT NULL DEFAULT 'application/octet-stream',
+    tamano           INTEGER NOT NULL,
+    ruta             VARCHAR(500) NOT NULL,
+    texto            TEXT NOT NULL DEFAULT '',
+    texto_extraido   BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_carga      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ix_archivo_adjunto_usuario ON archivo_adjunto(id_usuario);
+CREATE INDEX IF NOT EXISTS ix_archivo_adjunto_recurso ON archivo_adjunto(id_recurso);
+
 CREATE TABLE IF NOT EXISTS material_modelo (
     id_material       SERIAL PRIMARY KEY,
     id_tipo_recurso   INTEGER NOT NULL REFERENCES tipo_recurso(id_tipo_recurso),

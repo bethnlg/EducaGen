@@ -13,6 +13,7 @@ from ..config import config
 from ..database import SessionLocal
 from ..models import (
     Borrador,
+    ArchivoAdjunto,
     Carrera,
     Curso,
     RecursoEducativo,
@@ -67,6 +68,15 @@ def crear_recurso_pendiente(db, id_usuario: int, params: dict) -> RecursoEducati
     db.flush()
     db.add(Borrador(id_recurso=recurso.id_recurso, contenido={"parametros": params, "secciones": []}))
     db.add(TiempoElaboracion(id_recurso=recurso.id_recurso))
+    ids_adjuntos = [a.get("id") for a in params.get("adjuntos", []) if a.get("id")]
+    if ids_adjuntos:
+        adjuntos = db.scalars(select(ArchivoAdjunto).where(
+            ArchivoAdjunto.id_archivo.in_(ids_adjuntos),
+            ArchivoAdjunto.id_usuario == id_usuario,
+            ArchivoAdjunto.id_recurso.is_(None),
+        )).all()
+        for adjunto in adjuntos:
+            adjunto.id_recurso = recurso.id_recurso
     db.commit()
     return recurso
 

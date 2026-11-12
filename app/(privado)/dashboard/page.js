@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { EtiquetaTipo, Modal, useApp } from '@/components/Shell';
 import Icono from '@/components/Icono';
-import { api, streamSSE } from '@/lib/api';
+import { api, streamSSE, subirArchivo } from '@/lib/api';
 import { ESTADOS, TIPOS, fechaRelativa } from '@/lib/util';
 
 const CONFIG = {
@@ -50,6 +50,8 @@ export default function Dashboard() {
     const [advertencia, setAdvertencia] = useState(null); // competencias breves
     const [propuesta, setPropuesta] = useState(null); // pesos de rúbrica
     const [generacion, setGeneracion] = useState(null);
+    const [adjuntos, setAdjuntos] = useState([]);
+    const [subiendo, setSubiendo] = useState(false);
     const [recientes, setRecientes] = useState(null);
     const [resumen, setResumen] = useState(null);
     const abortar = useRef(null);
@@ -94,6 +96,7 @@ export default function Dashboard() {
             ...(tipo === 'rubrica' && { niveles: form.niveles }),
             ...(tipo === 'examen' && { num_preguntas: Number(form.num_preguntas) || 10 }),
             ...(tipo === 'caso' && { sector: form.sector }),
+            adjuntos,
             ...extra,
         };
 
@@ -120,6 +123,7 @@ export default function Dashboard() {
                     } else if (ev.tipo === 'error') {
                         setGeneracion((g) => ({ ...g, estado: 'error', mensaje: ev.mensaje, id: ev.id_recurso }));
                     }
+
                 },
             });
         } catch (err) {
@@ -132,6 +136,26 @@ export default function Dashboard() {
                 setInvalidos(d.campos);
                 avisar(err.message, 'error');
             } else avisar(err.message, 'error');
+        }
+    }
+
+    async function seleccionarArchivos(e) {
+        const archivos = Array.from(e.target.files || []);
+        e.target.value = '';
+        if (!archivos.length) return;
+        if (adjuntos.length + archivos.length > 5) {
+            avisar('Puedes adjuntar hasta 5 archivos por prompt.', 'aviso');
+            return;
+        }
+        setSubiendo(true);
+        try {
+            const cargados = [];
+            for (const archivo of archivos) cargados.push(await subirArchivo(archivo));
+            setAdjuntos((lista) => [...lista, ...cargados]);
+        } catch (err) {
+            avisar(err.message, 'error');
+        } finally {
+            setSubiendo(false);
         }
     }
 
@@ -212,6 +236,24 @@ export default function Dashboard() {
                                 {Array.from({ length: 10 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
                             </select>
                         </label>
+                    </div>
+
+                    <div className="adjuntos">
+                        <div className="adjuntos-cabecera">
+                            <span>Archivos de referencia (opcional)</span>
+                            <label className="boton boton-secundario boton-pequeno">
+                                {subiendo ? 'Cargando…' : 'Añadir archivo'}
+                                <input type="file" className="solo-lector" multiple onChange={seleccionarArchivos} disabled={subiendo || adjuntos.length >= 5} />
+                            </label>
+                        </div>
+                        <small className="texto-suave">Se admite cualquier formato. Se extrae texto de PDF, Word, Excel y archivos de texto para orientar a la IA (máximo 10 MB por archivo).</small>
+                        {adjuntos.length > 0 && <ul className="lista-adjuntos">
+                            {adjuntos.map((archivo) => (
+                                <li key={archivo.id}><span title={archivo.nombre}>{archivo.nombre}</span>
+                                    <button type="button" className="boton-texto" onClick={() => setAdjuntos((lista) => lista.filter((a) => a.id !== archivo.id))}>Quitar</button>
+                                </li>
+                            ))}
+                        </ul>}
                     </div>
 
                     {advertencia && (

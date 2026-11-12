@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..database import SessionLocal, get_db
 from ..deps import obtener_recurso_propio, usuario_actual
-from ..models import MensajeAsistente, Usuario
+from ..models import ArchivoAdjunto, MensajeAsistente, Usuario
 from ..schemas import AplicarIn, AsistenteIn
 from ..services.esquemas import verificar_conformidad
 from ..services.generacion import CABECERAS_SSE, sse
@@ -31,10 +31,19 @@ def consultar(id_recurso: int, datos: AsistenteIn, usuario: Usuario = Depends(us
     if not mensaje:  # HU0012-2
         _err(422, "Escribe al menos una palabra para el asistente.")
     secciones = _limpiar_secciones(datos.secciones) if datos.secciones else (r.borrador.contenido or {}).get("secciones", [])
+    ids_adjuntos = [a.id for a in datos.adjuntos]
+    if ids_adjuntos:
+        adjuntos = db.scalars(select(ArchivoAdjunto).where(
+            ArchivoAdjunto.id_archivo.in_(ids_adjuntos),
+            ArchivoAdjunto.id_usuario == usuario.id_usuario,
+            ArchivoAdjunto.id_recurso.is_(None),
+        )).all()
+        for adjunto in adjuntos:
+            adjunto.id_recurso = r.id_recurso
     historial = [(m.emisor, m.contenido) for m in db.scalars(
         select(MensajeAsistente).where(MensajeAsistente.id_recurso == r.id_recurso).order_by(MensajeAsistente.fecha_envio))]
     faltantes = verificar_conformidad(r.tipo.clave, secciones)["faltantes"]
-    sol = prompt_asistente(r.tipo.clave, r.titulo, secciones, mensaje, historial, faltantes, r.curso.nombre if r.curso else "")
+    sol = prompt_asistente(r.tipo.clave, r.titulo, secciones, mensaje, historial, faltantes, r.curso.nombre if r.curso else "", [a.model_dump() for a in datos.adjuntos])
     db.add(MensajeAsistente(id_recurso=r.id_recurso, emisor="docente", contenido=mensaje))
     db.commit()
     return StreamingResponse(_stream(usuario.id_usuario, r.id_recurso, sol), media_type="text/event-stream", headers=CABECERAS_SSE)

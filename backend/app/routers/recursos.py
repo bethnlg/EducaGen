@@ -1,9 +1,11 @@
 """Gestión de recursos educativos (EPICA0002 a EPICA0006)."""
 import re
 import uuid
+from io import BytesIO
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -13,6 +15,7 @@ from ..database import get_db
 from ..deps import obtener_recurso_propio, usuario_actual
 from ..models import (
     Alerta,
+    ArchivoAdjunto,
     ArchivoExportado,
     Borrador,
     ConsultaLLM,
@@ -42,6 +45,23 @@ router = APIRouter(prefix="/api/recursos", tags=["recursos"])
 
 SECTORES = ["Retail", "Banca y finanzas", "Salud", "Tecnología", "Educación", "Manufactura", "Minería", "Turismo", "Telecomunicaciones", "Sector público"]
 NIVELES_DEFECTO = ["Excelente", "Bueno", "En proceso", "Inicial"]
+
+
+def _extraer_texto_archivo(nombre: str, contenido: bytes) -> str:
+    extension = Path(nombre).suffix.lower()
+    if extension in {".txt", ".md", ".csv", ".json", ".xml", ".html", ".htm", ".py", ".js", ".ts", ".css", ".sql"}:
+        return contenido.decode("utf-8", errors="replace")
+    if extension == ".docx":
+        from docx import Document
+        return "\n".join(p.text for p in Document(BytesIO(contenido)).paragraphs)
+    if extension in {".xlsx", ".xlsm"}:
+        from openpyxl import load_workbook
+        libro = load_workbook(BytesIO(contenido), read_only=True, data_only=True)
+        return "\n".join(" | ".join("" if v is None else str(v) for v in fila) for hoja in libro.worksheets for fila in hoja.iter_rows(values_only=True))
+    if extension == ".pdf":
+        from pypdf import PdfReader
+        return "\n".join(p.extract_text() or "" for p in PdfReader(BytesIO(contenido)).pages)
+    return ""
 
 
 def _err(estado: int, mensaje: str, **extra):
@@ -94,6 +114,7 @@ def validar_parametros(datos: GenerarIn) -> tuple[dict, list[str]]:
     avisos: list[str] = []
     params = {"tipo": tipo, "curso": datos.curso.strip(), "temas": _lista(datos.temas),
               "carrera": (datos.carrera or "").strip() or None, "ciclo": datos.ciclo}
+    params["adjuntos"] = [a.model_dump() for a in datos.adjuntos]
 
     if tipo == "silabo":
         texto = datos.temas.strip()
@@ -156,6 +177,47 @@ def generar(datos: GenerarIn, usuario: Usuario = Depends(usuario_actual), db: Se
                              media_type="text/event-stream", headers=CABECERAS_SSE)
 
 
+@router.post("/archivos")
+async def cargar_archivo(
+    archivo: UploadFile = File(...),
+    usuario: Usuario = Depends(usuario_actual),
+    db: Session = Depends(get_db),
+):
+    """Carga un archivo de contexto y devuelve su texto extraíble para el prompt."""
+    if not archivo.filename:
+        _err(422, "Selecciona un archivo.")
+    contenido = await archivo.read(config.MAX_ARCHIVO_ADJUNTO_BYTES + 1)
+    if len(contenido) > config.MAX_ARCHIVO_ADJUNTO_BYTES:
+        _err(413, f"El archivo supera el límite de {config.MAX_ARCHIVO_ADJUNTO_BYTES // (1024 * 1024)} MB.")
+    usado = db.scalar(select(func.coalesce(func.sum(ArchivoAdjunto.tamano), 0)).where(
+        ArchivoAdjunto.id_usuario == usuario.id_usuario)) or 0
+    if usado + len(contenido) > config.MAX_ALMACEN_ADJUNTOS_USUARIO:
+        _err(413, "Alcanzaste tu cuota de almacenamiento de archivos de referencia (50 MB). Elimina archivos antiguos para continuar.")
+    try:
+        texto = _extraer_texto_archivo(archivo.filename, contenido)
+    except (ImportError, KeyError, OSError, TypeError, ValueError) as exc:
+        raise HTTPException(422, detail={"mensaje": "No se pudo leer el archivo. Puedes adjuntarlo, pero la IA no usará su contenido.", "codigo": "archivo_no_legible"}) from exc
+    carpeta = config.STORAGE_DIR / "uploads" / str(usuario.id_usuario)
+    carpeta.mkdir(parents=True, exist_ok=True)
+    ruta = carpeta / f"{uuid.uuid4().hex}{Path(archivo.filename).suffix.lower()[:10]}"
+    ruta.write_bytes(contenido)
+    adjunto = ArchivoAdjunto(
+        id_archivo=ruta.stem, id_usuario=usuario.id_usuario, nombre=archivo.filename[:200],
+        tipo=archivo.content_type or "application/octet-stream", tamano=len(contenido),
+        ruta=str(ruta), texto=texto[:config.MAX_TEXTO_ADJUNTO], texto_extraido=bool(texto.strip()),
+    )
+    db.add(adjunto)
+    db.commit()
+    return {
+        "id": adjunto.id_archivo,
+        "nombre": archivo.filename[:200],
+        "tipo": archivo.content_type or "application/octet-stream",
+        "tamano": len(contenido),
+        "texto": texto[:config.MAX_TEXTO_ADJUNTO],
+        "texto_extraido": bool(texto.strip()),
+    }
+
+
 @router.post("/{id_recurso}/generar")
 def reintentar_generacion(id_recurso: int, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
     """Reintenta un recurso que quedó pendiente porque la IA no estaba disponible (HU0029-2)."""
@@ -210,8 +272,9 @@ def listar(q: str = Query(default="", max_length=120), tipo: str = Query(default
     if q.strip():
         patron = f"%{q.strip()}%"
         consulta = consulta.where(or_(RecursoEducativo.titulo.ilike(patron), Curso.nombre.ilike(patron)))
+    total = db.scalar(select(func.count()).select_from(consulta.subquery())) or 0
     recursos = db.scalars(consulta.order_by(RecursoEducativo.fecha_actualizacion.desc()).limit(limite)).all()
-    return {"recursos": [_resumen(r) for r in recursos], "conteos": conteos, "total": sum(conteos.values())}
+    return {"recursos": [_resumen(r) for r in recursos], "conteos": conteos, "total": total}
 
 
 @router.get("/{id_recurso}")
@@ -235,6 +298,68 @@ def detalle(id_recurso: int, usuario: Usuario = Depends(usuario_actual), db: Ses
         "segundos_activos": r.tiempo.segundos_activos if r.tiempo else 0,
         "mensajes": [{"id": m.id_mensaje, "emisor": m.emisor, "contenido": m.contenido, "propuesta": m.propuesta,
                       "aplicado": m.aplicado, "fecha": _aware(m.fecha_envio)} for m in mensajes],
+        "adjuntos": [{"id": a.id_archivo, "nombre": a.nombre, "tipo": a.tipo, "tamano": a.tamano,
+                      "texto": a.texto, "texto_extraido": a.texto_extraido, "fecha": _aware(a.fecha_carga)}
+                     for a in db.scalars(select(ArchivoAdjunto).where(ArchivoAdjunto.id_recurso == r.id_recurso)
+                                         .order_by(ArchivoAdjunto.fecha_carga)).all()],
+    }
+
+
+@router.delete("/{id_recurso}/archivos/{id_archivo}")
+def eliminar_adjunto(id_recurso: int, id_archivo: str, usuario: Usuario = Depends(usuario_actual),
+                     db: Session = Depends(get_db)):
+    r = obtener_recurso_propio(db, id_recurso, usuario)
+    adjunto = db.scalar(select(ArchivoAdjunto).where(
+        ArchivoAdjunto.id_archivo == id_archivo,
+        ArchivoAdjunto.id_usuario == usuario.id_usuario,
+        ArchivoAdjunto.id_recurso == r.id_recurso,
+    ))
+    if not adjunto:
+        _err(404, "El archivo no existe o no pertenece a este recurso.")
+    try:
+        Path(adjunto.ruta).unlink(missing_ok=True)
+    except OSError:
+        pass
+    db.delete(adjunto)
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/{id_recurso}/versiones")
+def listar_versiones(id_recurso: int, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    r = obtener_recurso_propio(db, id_recurso, usuario)
+    versiones = db.scalars(select(VersionRecurso).where(VersionRecurso.id_recurso == r.id_recurso)
+                           .order_by(VersionRecurso.numero_version.desc())).all()
+    return {
+        "versiones": [{
+            "id": v.id_version,
+            "numero": v.numero_version,
+            "origen": v.origen,
+            "fecha": _aware(v.fecha_creacion),
+            "secciones": len((v.contenido or {}).get("secciones", [])),
+        } for v in versiones],
+    }
+
+
+@router.post("/{id_recurso}/versiones/{id_version}/restaurar")
+def restaurar_version(id_recurso: int, id_version: int, usuario: Usuario = Depends(usuario_actual),
+                      db: Session = Depends(get_db)):
+    r = obtener_recurso_propio(db, id_recurso, usuario)
+    version = db.scalar(select(VersionRecurso).where(
+        VersionRecurso.id_version == id_version, VersionRecurso.id_recurso == r.id_recurso))
+    if not version:
+        _err(404, "La versión no existe.")
+    if r.estado == "generando":
+        _err(409, "Espera a que termine la generación antes de restaurar una versión.")
+    secciones = _limpiar_secciones((version.contenido or {}).get("secciones", []))
+    guardar_contenido(db, r, secciones)
+    db.commit()
+    return {
+        "ok": True,
+        "contenido": {"secciones": secciones},
+        "estado": r.estado,
+        "fecha_guardado": _aware(r.borrador.fecha_guardado),
+        "conformidad": verificar_conformidad(r.tipo.clave, secciones),
     }
 
 

@@ -63,6 +63,10 @@ class Config:
 
     # Exportación y membrete
     STORAGE_DIR: Path = Path(os.getenv("STORAGE_DIR", str(BASE_DIR / "storage" / "exports")))
+    MAX_ARCHIVO_ADJUNTO_BYTES: int = int(os.getenv("MAX_ARCHIVO_ADJUNTO_BYTES", str(10 * 1024 * 1024)))
+    MAX_ARCHIVOS_ADJUNTOS: int = int(os.getenv("MAX_ARCHIVOS_ADJUNTOS", "5"))
+    MAX_TEXTO_ADJUNTO: int = int(os.getenv("MAX_TEXTO_ADJUNTO", "12000"))
+    MAX_ALMACEN_ADJUNTOS_USUARIO: int = int(os.getenv("MAX_ALMACEN_ADJUNTOS_USUARIO", str(50 * 1024 * 1024)))
     UNIVERSIDAD_NOMBRE: str = os.getenv("UNIVERSIDAD_NOMBRE", "Universidad Peruana de Ciencias Aplicadas")
     MEMBRETE_LOGO: Path = Path(os.getenv("MEMBRETE_LOGO", str(BASE_DIR / "assets" / "membrete.png")))
     HORAS_ENLACE_DESCARGA: int = 24
