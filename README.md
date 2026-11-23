@@ -99,3 +99,7 @@ pytest -q
 - Frontend en Vercel con `API_URL` y `JWT_SECRET` como variables de entorno.
 - API con `docker compose` en un servidor (AWS EC2) detrás de Nginx con HTTPS; PostgreSQL en Supabase o en el contenedor `db`.
 - En producción usa `COOKIE_SEGURA=true` y un `JWT_SECRET` largo y aleatorio.
+
+## Evidencia del piloto
+
+Los resultados reales de las 10 respuestas del piloto se encuentran en [`piloto_educagen/RESULTADOS.md`](./piloto_educagen/RESULTADOS.md). Los datos individuales publicados están anonimizados y pueden reproducirse con [`piloto_educagen/analizar_piloto.py`](./piloto_educagen/analizar_piloto.py).
