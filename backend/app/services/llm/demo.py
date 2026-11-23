@@ -9,6 +9,7 @@ import json
 import random
 import re
 from datetime import date
+from html import escape
 from typing import AsyncIterator
 
 from .base import Proveedor, ProveedorError, Solicitud, Uso, estimar_tokens
@@ -149,7 +150,73 @@ def generar_recurso(tipo: str, p: dict) -> dict:
 
     # caso de estudio
     sector = p.get("sector") or "Retail"
+    cantidad = int(p.get("num_preguntas") or 4)
+    cantidad = max(1, min(cantidad, 20))
     problema = ", ".join(temas[:3]).lower()
+    preguntas_base = [
+        "¿Cuáles son las causas principales del problema y cómo se relacionan entre sí?",
+        f"¿Qué conceptos de {curso} permiten analizar la situación de la empresa?",
+        "Propón dos alternativas de solución y compáralas según costo, plazo e impacto.",
+        "¿Qué indicadores usarías para verificar que la solución elegida funciona?",
+        "¿Qué riesgos presenta cada alternativa y cómo podrían mitigarse?",
+        "¿Qué decisiones deberían tomarse primero y cuál sería su justificación?",
+        "¿Cómo adaptarías la propuesta a las restricciones presupuestarias de la organización?",
+        "¿Qué información adicional sería necesaria antes de ejecutar la solución?",
+        "Diseña un plan de implementación con responsables, plazos e hitos.",
+        "¿Qué implicaciones éticas o normativas debe considerar el equipo?",
+        "Explica cómo comunicarías la decisión a clientes, colaboradores y directivos.",
+        "¿Qué supuestos has utilizado y cómo podrían cambiar tus conclusiones?",
+        "¿Qué métricas financieras permitirían evaluar el impacto de la propuesta?",
+        "¿Cómo manejarías una resistencia organizacional durante la implementación?",
+        "¿Qué escenario desfavorable podría afectar el proyecto y qué contingencia aplicarías?",
+        "Compara el costo de no actuar con el costo de implementar tu propuesta.",
+        "¿Qué aprendizaje organizacional debería quedar después del proyecto?",
+        "¿Qué resultados esperas observar durante las primeras ocho semanas?",
+        "¿Qué criterios determinan si la solución debe ampliarse o detenerse?",
+        "Presenta una recomendación final y relaciona cada decisión con los datos del caso.",
+    ]
+    adjuntos = p.get("adjuntos") or []
+    contexto_real = "\n\n".join(
+        str(a.get("texto") or "").strip()
+        for a in adjuntos
+        if str(a.get("texto") or "").strip()
+    )[:18000]
+    if contexto_real:
+        datos_clave = [
+            linea.strip()[:500]
+            for linea in contexto_real.splitlines()
+            if re.search(r"(venta|pedido|reclamo|retraso|zona|penalidad|semana|día|kpi|%|S/)", linea, re.I)
+        ][:12]
+        empresa_nombre = "Organización documentada en la fuente adjunta"
+        razon = re.search(r"(Distribuciones\s+(?:Andinas|[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ]+){0,3})(?:\s+S\.A\.?(?:C\.?)?)?)", contexto_real)
+        if razon:
+            empresa_nombre = razon.group(1).strip()
+        for linea in contexto_real.splitlines():
+            if empresa_nombre != "Organización documentada en la fuente adjunta":
+                break
+            coincidencia = re.search(r"(?:empresa|organización)\s*:?\s*([A-ZÁÉÍÓÚÑ][^.,]{3,100})", linea, re.I)
+            if coincidencia:
+                empresa_nombre = coincidencia.group(1).strip()
+                break
+            if re.search(r"(Distribuciones|Andinas|S\.A\.|S\.A\.C\.|Market)", linea):
+                empresa_nombre = linea.strip().lstrip("-• ").split(".")[0][:120]
+                break
+        return {
+            "titulo": f"Caso de estudio — {curso}",
+            "empresa": {
+                "nombre": empresa_nombre,
+                "sector": sector,
+                "descripcion": f"Organización analizada a partir de documentación real del sector {sector.lower()}.",
+            },
+            "narrativa": (
+                f"{contexto_real[:9000].strip()}\n\n"
+                "Fuente proporcionada por el docente: la solución debe respetar los nombres, cifras, restricciones "
+                "y decisiones documentadas. No se sustituyen los hechos reales por datos ficticios."
+            ),
+            "problema": f"¿Qué decisión debe tomar la organización para resolver {problema}, utilizando como base la situación y los datos documentados?",
+            "datos_clave": datos_clave or ["Fuente real adjunta disponible para contrastar hechos y cifras."],
+            "preguntas_discusion": preguntas_base[:cantidad],
+        }
     return {
         "titulo": f"Caso de estudio — {curso}",
         "empresa": {"nombre": "Andina Market S.A.C.", "sector": sector, "descripcion": f"Empresa peruana del sector {sector.lower()} con 12 años en el mercado, 340 colaboradores y presencia en Lima y tres regiones."},
@@ -160,12 +227,7 @@ def generar_recurso(tipo: str, p: dict) -> dict:
         ),
         "problema": f"¿Qué decisión debe tomar Andina Market para resolver los problemas asociados a {problema}, considerando sus restricciones de tiempo y presupuesto?",
         "datos_clave": ["Ventas anuales: S/ 48 millones", "Caída de margen: 3,2 puntos porcentuales", "Rotación de personal: 21 %", "Satisfacción del cliente: 68/100"],
-        "preguntas_discusion": [
-            "¿Cuáles son las causas principales del problema y cómo se relacionan entre sí?",
-            f"¿Qué conceptos de {curso} permiten analizar la situación de la empresa?",
-            "Propón dos alternativas de solución y compáralas según costo, plazo e impacto.",
-            "¿Qué indicadores usarías para verificar que la solución elegida funciona?",
-        ],
+        "preguntas_discusion": preguntas_base[:cantidad],
     }
 
 
@@ -187,7 +249,28 @@ def regenerar_bloque(texto: str, instruccion: str = "") -> str:
 def responder_asistente(ctx: dict) -> str:
     mensaje = (ctx.get("mensaje") or "").lower()
     secciones = ctx.get("secciones") or []
+    adjuntos = ctx.get("adjuntos") or []
+    contexto_real = "\n\n".join(
+        str(a.get("texto") or "").strip()
+        for a in adjuntos
+        if str(a.get("texto") or "").strip()
+    )[:18000]
     cambios = []
+
+    if contexto_real and any(palabra in mensaje for palabra in ("amplía", "ampliar", "desarrolla", "desarrollar", "extiende", "extender", "expande", "expandir", "detalla", "detallar")):
+        if not secciones:
+            secciones = []
+        destino = next((s for s in secciones if s.get("clave") == "narrativa" or "descripción" in s.get("titulo", "").lower()), None)
+        fragmento = contexto_real[:12000].strip()
+        html_ampliado = (
+            f"<p><strong>Contexto ampliado a partir de la fuente adjunta:</strong></p>"
+            f"<p>{escape(fragmento[:7000].replace(chr(10), '</p><p>'))}</p>"
+        )
+        if destino:
+            cambios.append({"id": destino["id"], "titulo": destino["titulo"], "html": destino["html"] + html_ampliado})
+        else:
+            cambios.append({"id": "nuevo", "titulo": "Descripción ampliada del caso", "html": html_ampliado})
+        return "Amplié el caso incorporando hechos, cifras y restricciones presentes en el documento adjunto." + "\n" + MARCADOR + json.dumps({"tipo": "fuente_real", "secciones": cambios}, ensure_ascii=False)
 
     if "bibliograf" in mensaje or "apa" in mensaje:
         anio = date.today().year

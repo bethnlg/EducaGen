@@ -32,7 +32,7 @@ SISTEMA_BASE = (
 )
 
 
-def depurar(texto: str, limite: int = 1500) -> str:
+def depurar(texto: str, limite: int = 60000) -> str:
     """Valida y depura la entrada del docente antes de enviarla al LLM."""
     texto = (texto or "").replace("```", "").replace("<<<", "").replace(">>>", "")
     texto = _INYECCION.sub("[texto omitido]", texto)
@@ -47,7 +47,7 @@ def contexto_adjuntos(adjuntos: list[dict] | None) -> str:
     partes = []
     for archivo in adjuntos[:5]:
         nombre = depurar(str(archivo.get("nombre") or "archivo"), 200)
-        texto = depurar(str(archivo.get("texto") or ""), 12000)
+        texto = depurar(str(archivo.get("texto") or ""), 60000)
         if texto:
             partes.append(f"<archivo nombre=\"{nombre}\">\n{texto}\n</archivo>")
         else:
@@ -128,7 +128,15 @@ def prompt_generacion(tipo: str, params: dict, materiales: list[MaterialModelo],
         "silabo": "Organiza el curso en unidades que cubran exactamente el número de semanas indicado. Los pesos de la evaluación suman 100. La bibliografía va en APA 7 y prioriza obras de los últimos 5 años.",
         "rubrica": f"La nota máxima es 20. Usa exactamente los criterios y niveles indicados, en el mismo orden. Cada criterio tiene un descriptor observable por nivel. Los pesos suman 100.",
         "examen": f"Genera exactamente {params.get('num_preguntas', 10)} preguntas en total (como máximo {config.MAX_PREGUNTAS}), combinando opción múltiple (4 alternativas, una correcta) y desarrollo. Incluye la respuesta de cada pregunta.",
-        "caso": "Redacta un caso realista de una empresa ficticia del sector indicado, con personajes y datos verosímiles, y exactamente 4 preguntas de discusión que promuevan el análisis crítico.",
+        "caso": (
+            f"Redacta un caso amplio y realista basado en los datos proporcionados. "
+            f"Cuando existan archivos adjuntos, conserva nombres reales, fechas, cifras, hechos y decisiones pendientes; "
+            f"no los sustituyas por una empresa ficticia ni inventes datos que no estén en las fuentes. "
+            f"Si el contexto es incompleto, marca explícitamente qué información falta y secciones que requieren contraste. "
+            f"Incluye contexto organizacional, situación actual, datos cuantitativos, decisiones pendientes y restricciones. "
+            f"Genera exactamente {params.get('num_preguntas', 4)} preguntas de discusión numeradas que promuevan el análisis crítico, "
+            f"la aplicación de conceptos y la elaboración de propuestas justificadas."
+        ),
     }[tipo]
 
     ejemplos = ""
@@ -202,7 +210,7 @@ def prompt_asistente(tipo: str, titulo: str, secciones: list[dict], mensaje: str
         prompt=prompt,
         operacion="asistente",
         temperatura=0.6,
-        contexto={"mensaje": mensaje, "secciones": secciones, "tipo": tipo, "faltantes": faltantes, "curso": curso},
+        contexto={"mensaje": mensaje, "secciones": secciones, "tipo": tipo, "faltantes": faltantes, "curso": curso, "adjuntos": adjuntos or []},
     )
 
 

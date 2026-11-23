@@ -152,7 +152,7 @@ async def generar_stream(id_usuario: int, id_recurso: int, params: dict, avisos:
                 yield sse({"tipo": "estado", "mensaje": f"Generado con el servicio de respaldo ({uso.proveedor})."})
 
             datos = extraer_json(texto)
-            faltantes = validar_json(tipo, datos)
+            faltantes = validar_json(tipo, datos, params.get("num_preguntas") if tipo == "caso" else None)
             if not faltantes:
                 break
             if intento == 0:

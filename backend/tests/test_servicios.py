@@ -9,7 +9,7 @@ PARAMS = {
     "silabo": {"curso": "Algoritmos", "temas": ["recursividad", "árboles", "grafos"], "semanas": 16},
     "rubrica": {"curso": "Comunicación", "criterios": [("Redacción", 50), ("Análisis", 50)], "niveles": ["Excelente", "Bueno", "Inicial"]},
     "examen": {"curso": "Bases de Datos", "temas": ["SQL", "normalización"], "num_preguntas": 6},
-    "caso": {"curso": "Marketing", "temas": ["omnicanalidad"], "sector": "Retail"},
+    "caso": {"curso": "Marketing", "temas": ["omnicanalidad"], "sector": "Retail", "num_preguntas": 4},
 }
 
 
@@ -28,10 +28,50 @@ def test_seccion_faltante_detectada():  # HU0024-2
     assert not conf["conforme"] and conf["faltantes"] == ["Bibliografía"]
 
 
-def test_caso_requiere_cuatro_preguntas():  # HU0009-1
+def test_caso_requiere_la_cantidad_solicitada():  # HU0009-1
     datos = generar_recurso("caso", PARAMS["caso"])
     datos["preguntas_discusion"] = datos["preguntas_discusion"][:2]
     assert esquemas.validar_json("caso", datos)
+
+
+def test_caso_respeta_cantidad_personalizada():
+    datos = generar_recurso("caso", {**PARAMS["caso"], "num_preguntas": 6})
+    assert len(datos["preguntas_discusion"]) == 6
+    assert esquemas.validar_json("caso", datos, num_preguntas=6) == []
+
+
+def test_caso_real_usa_el_documento_adjunto_sin_generar_reemplazos_ficticios():
+    texto = (
+        "Distribuciones Andinas S.A. gestiona entregas a bodegas y supermercados "
+        "en tres ciudades. En dos zonas críticas registra 18 % de retrasos y 42 reclamos "
+        "durante cuatro semanas. Objetivo: reducir reclamos y penalidades."
+    )
+    datos = generar_recurso("caso", {
+        **PARAMS["caso"],
+        "adjuntos": [{"nombre": "caso.docx", "texto": texto}],
+        "num_preguntas": 8,
+    })
+    assert "Distribuciones Andinas" in datos["narrativa"]
+    assert "Andina Market" not in datos["narrativa"]
+    assert len(datos["preguntas_discusion"]) == 8
+
+
+def test_asistente_recibe_documentos_adicionales_y_puede_ampliar_el_caso():
+    secciones = esquemas.json_a_secciones("caso", generar_recurso("caso", PARAMS["caso"]))
+    solicitud = prompt_generacion("caso", {
+        **PARAMS["caso"],
+        "adjuntos": [{"id": "a1", "nombre": "caso.docx", "texto": "Distribuciones Andinas registró 42 reclamos y dos zonas críticas."}],
+    }, [], None)
+    assert "Distribuciones Andinas" in solicitud.prompt
+
+    contexto = {
+        "mensaje": "Amplía la descripción con los datos del documento",
+        "secciones": secciones,
+        "adjuntos": [{"nombre": "caso.docx", "texto": "Distribuciones Andinas registró 42 reclamos y dos zonas críticas."}],
+    }
+    respuesta = responder_asistente(contexto)
+    assert "Amplié el caso" in respuesta
+    assert "<<<CAMBIOS>>>" in respuesta
 
 
 def test_limpieza_de_html():  # HU0015-2

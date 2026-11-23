@@ -53,11 +53,28 @@ def _extraer_texto_archivo(nombre: str, contenido: bytes) -> str:
         return contenido.decode("utf-8", errors="replace")
     if extension == ".docx":
         from docx import Document
-        return "\n".join(p.text for p in Document(BytesIO(contenido)).paragraphs)
+        documento = Document(BytesIO(contenido))
+        partes = [p.text for p in documento.paragraphs if p.text.strip()]
+        for tabla in documento.tables:
+            for fila in tabla.rows:
+                partes.append(" | ".join(celda.text.strip() for celda in fila.cells))
+        return "\n".join(partes)
     if extension in {".xlsx", ".xlsm"}:
         from openpyxl import load_workbook
         libro = load_workbook(BytesIO(contenido), read_only=True, data_only=True)
         return "\n".join(" | ".join("" if v is None else str(v) for v in fila) for hoja in libro.worksheets for fila in hoja.iter_rows(values_only=True))
+    if extension == ".pptx":
+        from pptx import Presentation
+        presentacion = Presentation(BytesIO(contenido))
+        partes = []
+        for diapositiva in presentacion.slides:
+            for forma in diapositiva.shapes:
+                if getattr(forma, "has_text_frame", False):
+                    partes.append(forma.text)
+                if getattr(forma, "has_table", False):
+                    for fila in forma.table.rows:
+                        partes.append(" | ".join(celda.text.strip() for celda in fila.cells))
+        return "\n".join(partes)
     if extension == ".pdf":
         from pypdf import PdfReader
         return "\n".join(p.extract_text() or "" for p in PdfReader(BytesIO(contenido)).pages)
@@ -158,6 +175,7 @@ def validar_parametros(datos: GenerarIn) -> tuple[dict, list[str]]:
         if normalizar(sector) not in {normalizar(s) for s in SECTORES}:  # HU0009-2
             avisos.append(f"El sector «{sector}» no está en la lista: se usó una plantilla general adaptada. Puedes pedir al asistente que cambie los nombres de la empresa y los personajes.")
         params["sector"] = sector
+        params["num_preguntas"] = min(datos.num_preguntas or 4, 20)
     return params, avisos
 
 

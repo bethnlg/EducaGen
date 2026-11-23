@@ -77,7 +77,7 @@ ESQUEMAS_JSON = {
         "narrativa": "string (2 a 4 párrafos separados por línea en blanco)",
         "problema": "string",
         "datos_clave": ["string"],
-        "preguntas_discusion": ["string x4"],
+        "preguntas_discusion": ["string xN"],
     },
 }
 
@@ -95,13 +95,15 @@ def normalizar(texto: str) -> str:
     return re.sub(r"\s+", " ", texto).strip()
 
 
-def validar_json(tipo: str, datos) -> list[str]:
+def validar_json(tipo: str, datos, num_preguntas: int | None = None) -> list[str]:
     """Devuelve la lista de claves faltantes o vacías (HU0034-2)."""
     if not isinstance(datos, dict):
         return CLAVES_REQUERIDAS[tipo]
     faltantes = [c for c in CLAVES_REQUERIDAS[tipo] if not datos.get(c)]
-    if tipo == "caso" and isinstance(datos.get("preguntas_discusion"), list) and len(datos["preguntas_discusion"]) < 4:
-        faltantes.append("preguntas_discusion (se requieren 4)")
+    if tipo == "caso" and isinstance(datos.get("preguntas_discusion"), list):
+        esperadas = num_preguntas or 4
+        if len(datos["preguntas_discusion"]) != esperadas:
+            faltantes.append(f"preguntas_discusion (se requieren {esperadas})")
     if tipo == "rubrica":
         for c in datos.get("criterios") or []:
             if not isinstance(c, dict) or not c.get("descriptores"):

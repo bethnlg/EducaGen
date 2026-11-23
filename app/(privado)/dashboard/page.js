@@ -22,15 +22,15 @@ const CONFIG = {
         ejemploTemas: 'Ej. Normalización, consultas SQL, transacciones',
     },
     caso: {
-        etiquetaTemas: 'Problema académico o temas a abordar',
-        ejemploTemas: 'Ej. Omnicanalidad, rentabilidad de tiendas, logística',
+        etiquetaTemas: 'Problema académico, tema y datos clave del caso real',
+        ejemploTemas: 'Ej. Crisis ágil en Distribuciones Andinas: riesgos de entrega, zonas con retrasos, seguimiento y priorización con un MVP',
     },
 };
 
 const CARRERAS = ['Ingeniería de Software', 'Ingeniería de Sistemas de Información', 'Ciencias de la Computación', 'Administración y Marketing', 'Comunicación y Periodismo'];
 const SECTORES = ['Retail', 'Banca y finanzas', 'Salud', 'Tecnología', 'Educación', 'Manufactura', 'Minería', 'Turismo', 'Telecomunicaciones', 'Sector público'];
 
-const INICIAL = { curso: '', temas: '', carrera: '', ciclo: '', semanas: 16, niveles: 'Excelente, Bueno, En proceso, Inicial', num_preguntas: 10, sector: 'Retail' };
+const INICIAL = { curso: '', temas: '', carrera: '', ciclo: '', semanas: 16, niveles: 'Excelente, Bueno, En proceso, Inicial', num_preguntas: 10, num_caso_preguntas: 4, sector: 'Retail' };
 
 function vistaPrevia(texto) {
     // Muestra el contenido que va llegando sin la sintaxis JSON
@@ -95,7 +95,7 @@ export default function Dashboard() {
             ...(tipo === 'silabo' && { semanas: Number(form.semanas) || 16 }),
             ...(tipo === 'rubrica' && { niveles: form.niveles }),
             ...(tipo === 'examen' && { num_preguntas: Number(form.num_preguntas) || 10 }),
-            ...(tipo === 'caso' && { sector: form.sector }),
+            ...(tipo === 'caso' && { sector: form.sector, num_preguntas: Number(form.num_caso_preguntas) || 4 }),
             adjuntos,
             ...extra,
         };
@@ -174,8 +174,12 @@ export default function Dashboard() {
             </header>
 
             <section className="crear" aria-labelledby="titulo-crear">
-                <h2 id="titulo-crear">Crear un recurso en un paso</h2>
-                <p className="crear-sub">Elige el tipo, completa lo esencial y genera tu material sin salir de esta pantalla.</p>
+                <h2 id="titulo-crear">{tipo === 'caso' ? 'Zona de casos de estudio' : 'Crear un recurso en un paso'}</h2>
+                <p className="crear-sub">
+                    {tipo === 'caso'
+                        ? 'Indica el tema y los datos clave; EducaGen generará un caso amplio, sus preguntas y una estructura exportable.'
+                        : 'Elige el tipo, completa lo esencial y genera tu material sin salir de esta pantalla.'}
+                </p>
 
                 <div className="chips" role="radiogroup" aria-label="Tipo de recurso">
                     {Object.entries(TIPOS).map(([clave, t]) => (
@@ -218,11 +222,17 @@ export default function Dashboard() {
                             </label>
                         )}
                         {tipo === 'caso' && (
-                            <label className="campo-claro">
-                                <span>Sector</span>
-                                <input name="sector" list="sectores" value={form.sector} onChange={cambiar} />
-                                <datalist id="sectores">{SECTORES.map((s) => <option key={s} value={s} />)}</datalist>
-                            </label>
+                            <>
+                                <label className="campo-claro">
+                                    <span>Sector</span>
+                                    <input name="sector" list="sectores" value={form.sector} onChange={cambiar} />
+                                    <datalist id="sectores">{SECTORES.map((s) => <option key={s} value={s} />)}</datalist>
+                                </label>
+                                <label className="campo-claro corto">
+                                    <span>N.º de preguntas</span>
+                                    <input name="num_caso_preguntas" type="number" min={1} max={20} value={form.num_caso_preguntas} onChange={cambiar} />
+                                </label>
+                            </>
                         )}
                         <label className="campo-claro">
                             <span>Carrera (opcional)</span>

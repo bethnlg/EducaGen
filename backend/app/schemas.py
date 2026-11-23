@@ -9,7 +9,7 @@ class ArchivoAdjuntoIn(BaseModel):
     nombre: str = Field(min_length=1, max_length=200)
     tipo: str = Field(default="application/octet-stream", max_length=150)
     tamano: int = Field(ge=0)
-    texto: str = Field(default="", max_length=12000)
+    texto: str = Field(default="", max_length=60000)
 
 
 class RegistroIn(BaseModel):
