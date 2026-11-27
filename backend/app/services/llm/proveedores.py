@@ -32,7 +32,11 @@ class GeminiProveedor(Proveedor):
         return bool(config.GEMINI_API_KEY)
 
     async def stream(self, sol: Solicitud, uso: Uso) -> AsyncIterator[str]:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.modelo}:streamGenerateContent"
+        clave = config.GEMINI_API_KEY.strip()
+        if clave.startswith("AQ."):
+            url = f"https://aiplatform.googleapis.com/v1/publishers/google/models/{self.modelo}:streamGenerateContent"
+        else:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.modelo}:streamGenerateContent"
         cuerpo = {
             "systemInstruction": {"parts": [{"text": sol.sistema}]},
             "contents": [{"role": "user", "parts": [{"text": sol.prompt}]}],
