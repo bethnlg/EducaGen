@@ -55,11 +55,12 @@ En el Dashboard y en el asistente del Editor se pueden adjuntar hasta 5 archivos
 
 ### 3. Claves de IA
 
-Sin claves la aplicación funciona en **modo demostración** (plantillas locales con el mismo flujo de streaming, validación y reintentos). Para usar los modelos reales agrega en `backend/.env`:
+Sin claves la aplicación funciona en **modo demostración** (plantillas locales con el mismo flujo de streaming, validación y reintentos). Para usar los modelos reales (ambos con plan gratuito disponible) agrega en `backend/.env`:
 
 ```
+GROQ_API_KEY=...
 GEMINI_API_KEY=...
-CLAUDE_API_KEY=...
+# Opcional: CLAUDE_API_KEY=...
 ```
 
 Para mostrar la continuidad ante fallas en modo demostración:
@@ -94,11 +95,12 @@ pytest -q
 | HU0028-HU0029 Reintentos y respaldo | `services/llm/adaptador.py` |
 | HU0034 Recurso completo (reintento correctivo) | `services/generacion.py` |
 
-## Despliegue (Figura 2 del OB2)
+## Despliegue (Figura 2 del OB2 y versión gratuita en la nube)
 
-- Frontend en Vercel con `API_URL` y `JWT_SECRET` como variables de entorno.
-- API con `docker compose` en un servidor (AWS EC2) detrás de Nginx con HTTPS; PostgreSQL en Supabase o en el contenedor `db`.
-- En producción usa `COOKIE_SEGURA=true` y un `JWT_SECRET` largo y aleatorio.
+- Frontend en **Vercel** con `API_URL` (URL pública del backend sin `/` final) y `JWT_SECRET` como variables de entorno. El proxy `app/api/[...path]/route.js` reenvía cookies y Server-Sent Events sin almacenamiento intermedio.
+- API con **Docker** en Render (`render.yaml`), Koyeb, Hugging Face Spaces o `docker compose` (AWS EC2); PostgreSQL en **Neon.tech** (recomendado en capa gratuita sin pausas semanales), Supabase o el contenedor `db`.
+- En plataformas gratuitas que bloquean el puerto SMTP `587`, configura `CORREO_WEBHOOK_URL` y `CORREO_WEBHOOK_SECRET` para enviar correos por HTTPS (`443`).
+- En producción usa `COOKIE_SEGURA=true`, un `JWT_SECRET` largo y aleatorio idéntico en frontend y backend, y un monitor periódico a `GET /api/salud` para evitar el apagado por inactividad.
 
 ## Evidencia del piloto
 

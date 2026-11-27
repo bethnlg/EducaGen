@@ -1,0 +1,37 @@
+# Blueprint de despliegue gratuito en Render (Backend Docker).
+# La base de datos PostgreSQL recomendada se aloja gratis en Neon.tech (DATABASE_URL).
+services:
+  - type: web
+    name: educagen-api
+    runtime: docker
+    rootDir: backend
+    plan: free
+    region: virginia
+    healthCheckPath: /api/salud
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: COOKIE_SEGURA
+        value: "true"
+      - key: APP_URL
+        sync: false
+      - key: CORS_ORIGENES
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: LLAMA_MODEL
+        value: openai/gpt-oss-120b
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: LLM_MODO
+        value: auto
+      - key: CORREO_WEBHOOK_URL
+        sync: false
+      - key: CORREO_WEBHOOK_SECRET
+        sync: false
+      - key: CREAR_USUARIO_DEMO
+        value: "true"

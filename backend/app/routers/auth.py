@@ -50,15 +50,22 @@ def registrar(datos: RegistroIn, respuesta: Response, tareas: BackgroundTasks, d
         _err(409, "Este correo ya se encuentra en uso. Inicia sesión o recupera tu contraseña.", campos=["correo"])
 
     partes = nombre.split(" ", 1)
+    ahora_utc = datetime.now(timezone.utc)
+    requiere_verificacion = config.REQUERIR_VERIFICACION_CORREO
     usuario = Usuario(id_rol=1, nombres=partes[0], apellidos=partes[1] if len(partes) > 1 else "",
                       correo_institucional=correo_n, hash_contrasena=hash_contrasena(datos.contrasena),
-                      estado="pendiente_verificacion", ultimo_acceso=None)
+                      estado="pendiente_verificacion" if requiere_verificacion else "activo",
+                      ultimo_acceso=None if requiere_verificacion else ahora_utc)
     db.add(usuario)
     db.commit()
     db.refresh(usuario)
+    if not requiere_verificacion:
+        _poner_cookie(respuesta, usuario)
+        tareas.add_task(_enviar_seguro, correo.enviar_bienvenida, correo_n, usuario.nombre_completo)
+        return {"ok": True, "requiere_verificacion": False, "correo": correo_n, "usuario": _perfil(usuario)}
     token, token_hash = nuevo_token_recuperacion()
     db.add(TokenVerificacion(id_usuario=usuario.id_usuario, token_hash=token_hash,
-                             fecha_expiracion=datetime.now(timezone.utc) + timedelta(hours=24)))
+                             fecha_expiracion=ahora_utc + timedelta(hours=24)))
     db.commit()
     enlace = f"{config.APP_URL}/verificar?correo={correo_n}&token={token}"
     tareas.add_task(_enviar_seguro, correo.enviar_verificacion, correo_n, usuario.nombre_completo, enlace)
@@ -83,7 +90,7 @@ def iniciar_sesion(datos: LoginIn, respuesta: Response, db: Session = Depends(ge
 
 @router.post("/logout")
 def cerrar_sesion(respuesta: Response):
-    respuesta.delete_cookie(COOKIE_SESION, path="/")
+    respuesta.delete_cookie(COOKIE_SESION, path="/", httponly=True, secure=config.COOKIE_SEGURA, samesite="lax")
     return {"ok": True}
 
 

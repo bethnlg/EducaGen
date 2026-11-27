@@ -31,6 +31,14 @@ CREATE TABLE IF NOT EXISTS token_recuperacion (
     usado             BOOLEAN      NOT NULL DEFAULT FALSE
 );
 
+CREATE TABLE IF NOT EXISTS token_verificacion (
+    id_token          SERIAL PRIMARY KEY,
+    id_usuario        INTEGER      NOT NULL REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+    token_hash        VARCHAR(255) NOT NULL,
+    fecha_expiracion  TIMESTAMPTZ  NOT NULL,
+    usado             BOOLEAN      NOT NULL DEFAULT FALSE
+);
+
 CREATE TABLE IF NOT EXISTS carrera (
     id_carrera  SERIAL PRIMARY KEY,
     nombre      VARCHAR(120) NOT NULL UNIQUE

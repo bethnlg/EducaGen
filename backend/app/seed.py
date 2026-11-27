@@ -7,12 +7,13 @@ import json
 import logging
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from .config import BASE_DIR
-from .database import Base, SessionLocal, engine
+from .config import BASE_DIR, config
+from .database import Base, SessionLocal, engine, es_postgres
 from .models import Carrera, MaterialModelo, Rol, TipoRecurso, Usuario
+from .security import hash_contrasena
 from .services.esquemas import ESQUEMAS_JSON, SECCIONES_OBLIGATORIAS, TIPOS
 
 log = logging.getLogger("educagen.seed")
@@ -119,6 +120,19 @@ def sembrar(db: Session):
                 ciclo=ciclo, titulo=titulo, contenido_texto=texto.strip(), estado="validado",
             ))
 
+    # Cuenta institucional de demostración (GUIA_DEMO_5_MINUTOS.md)
+    correo_demo = (config.DEMO_CORREO or "").strip().lower()
+    if config.CREAR_USUARIO_DEMO and correo_demo and config.DEMO_CONTRASENA:
+        if not db.scalar(select(Usuario).where(Usuario.correo_institucional == correo_demo)):
+            db.add(Usuario(
+                id_rol=1,
+                nombres="Docente",
+                apellidos="Demostración",
+                correo_institucional=correo_demo,
+                hash_contrasena=hash_contrasena(config.DEMO_CONTRASENA),
+                estado="activo",
+            ))
+
     # Migra los usuarios creados con el prototipo anterior (contraseñas bcrypt compatibles)
     archivo = BASE_DIR.parent / "data" / "usuarios.json"
     if archivo.is_file():
@@ -136,6 +150,15 @@ def sembrar(db: Session):
 
 def inicializar():
     Base.metadata.create_all(bind=engine)
+    if es_postgres():
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_material_fts ON material_modelo "
+                    "USING GIN (to_tsvector('spanish', titulo || ' ' || contenido_texto))"
+                ))
+        except Exception as e:
+            log.warning("No se pudo crear el índice FTS en PostgreSQL: %s", e)
     with SessionLocal() as db:
         sembrar(db)
 

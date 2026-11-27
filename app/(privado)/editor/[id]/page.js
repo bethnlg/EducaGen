@@ -409,6 +409,16 @@ export default function EditorPage() {
         }
     }
 
+    async function quitarAdjunto(adjunto) {
+        try {
+            await api(`/api/recursos/${id}/archivos/${adjunto.id}`, { method: 'DELETE' });
+            setAdjuntos((lista) => lista.filter((a) => a.id !== adjunto.id));
+            avisar(`Se quitó «${adjunto.nombre}».`, 'exito');
+        } catch (err) {
+            avisar(err.message, 'error');
+        }
+    }
+
     async function seleccionarAdjuntos(e) {
         const archivos = Array.from(e.target.files || []);
         e.target.value = '';
@@ -418,15 +428,6 @@ export default function EditorPage() {
             return;
         }
 
-        async function quitarAdjunto(adjunto) {
-            try {
-                await api(`/api/recursos/${id}/archivos/${adjunto.id}`, { method: 'DELETE' });
-                setAdjuntos((lista) => lista.filter((a) => a.id !== adjunto.id));
-                avisar(`Se quitó «${adjunto.nombre}».`, 'exito');
-            } catch (err) {
-                avisar(err.message, 'error');
-            }
-        }
         setSubiendoAdjunto(true);
         try {
             const cargados = [];
@@ -601,6 +602,7 @@ export default function EditorPage() {
                                         ))}
                                     </select>
                                     <span className="logo-seleccionado">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img
                                             src={urlLogoUniversidad(UNIVERSIDADES_PRIVADAS_LIMA.find((u) => u.clave === opcionesExportar.universidad))}
                                             alt={`Logo de ${UNIVERSIDADES_PRIVADAS_LIMA.find((u) => u.clave === opcionesExportar.universidad)?.nombre || 'la universidad seleccionada'}`}

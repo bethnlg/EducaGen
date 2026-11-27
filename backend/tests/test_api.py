@@ -142,3 +142,20 @@ def test_recurso_ajeno_403(cliente):  # HU0004-2
             db.commit()
         otro.post("/api/auth/login", json={"correo": "beth@universidad.edu.pe", "contrasena": "clave-segura-2"})
         assert otro.get(f"/api/recursos/{rid}").status_code == 403
+
+
+def test_usuario_demo_activo():
+    with TestClient(app) as c:
+        r = c.post("/api/auth/login", json={"correo": "demo@universidad.edu.pe", "contrasena": "EducaGenDemo2026!"})
+        assert r.status_code == 200
+        assert r.json()["usuario"]["correo"] == "demo@universidad.edu.pe"
+
+
+def test_eliminar_adjunto_antes_de_vincular(cliente, monkeypatch, tmp_path):
+    monkeypatch.setattr("app.routers.recursos.config.STORAGE_DIR", tmp_path)
+    rid = cliente.get("/api/recursos").json()["recursos"][0]["id"]
+    subido = cliente.post("/api/recursos/archivos", files={"archivo": ("borrador.txt", b"Contexto temporal", "text/plain")}).json()
+    assert cliente.delete(f"/api/recursos/{rid}/archivos/{subido['id']}").status_code == 200
+
+    subido2 = cliente.post("/api/recursos/archivos", files={"archivo": ("suelto.txt", b"Otro contexto", "text/plain")}).json()
+    assert cliente.delete(f"/api/recursos/archivos/{subido2['id']}").status_code == 200

@@ -139,6 +139,15 @@ export default function Dashboard() {
         }
     }
 
+    async function quitarAdjunto(archivo) {
+        setAdjuntos((lista) => lista.filter((a) => a.id !== archivo.id));
+        try {
+            await api(`/api/recursos/archivos/${archivo.id}`, { method: 'DELETE' });
+        } catch {
+            /* si ya no existe en el servidor se ignora */
+        }
+    }
+
     async function seleccionarArchivos(e) {
         const archivos = Array.from(e.target.files || []);
         e.target.value = '';
@@ -260,7 +269,7 @@ export default function Dashboard() {
                         {adjuntos.length > 0 && <ul className="lista-adjuntos">
                             {adjuntos.map((archivo) => (
                                 <li key={archivo.id}><span title={archivo.nombre}>{archivo.nombre}</span>
-                                    <button type="button" className="boton-texto" onClick={() => setAdjuntos((lista) => lista.filter((a) => a.id !== archivo.id))}>Quitar</button>
+                                    <button type="button" className="boton-texto" onClick={() => quitarAdjunto(archivo)}>Quitar</button>
                                 </li>
                             ))}
                         </ul>}

@@ -236,6 +236,25 @@ async def cargar_archivo(
     }
 
 
+@router.delete("/archivos/{id_archivo}")
+def eliminar_adjunto_pendiente(id_archivo: str, usuario: Usuario = Depends(usuario_actual),
+                               db: Session = Depends(get_db)):
+    """Elimina un archivo cargado por el usuario antes de asociarlo a un recurso."""
+    adjunto = db.scalar(select(ArchivoAdjunto).where(
+        ArchivoAdjunto.id_archivo == id_archivo,
+        ArchivoAdjunto.id_usuario == usuario.id_usuario,
+    ))
+    if not adjunto:
+        _err(404, "El archivo no existe.")
+    try:
+        Path(adjunto.ruta).unlink(missing_ok=True)
+    except OSError:
+        pass
+    db.delete(adjunto)
+    db.commit()
+    return {"ok": True}
+
+
 @router.post("/{id_recurso}/generar")
 def reintentar_generacion(id_recurso: int, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
     """Reintenta un recurso que quedó pendiente porque la IA no estaba disponible (HU0029-2)."""
@@ -330,7 +349,7 @@ def eliminar_adjunto(id_recurso: int, id_archivo: str, usuario: Usuario = Depend
     adjunto = db.scalar(select(ArchivoAdjunto).where(
         ArchivoAdjunto.id_archivo == id_archivo,
         ArchivoAdjunto.id_usuario == usuario.id_usuario,
-        ArchivoAdjunto.id_recurso == r.id_recurso,
+        or_(ArchivoAdjunto.id_recurso == r.id_recurso, ArchivoAdjunto.id_recurso.is_(None)),
     ))
     if not adjunto:
         _err(404, "El archivo no existe o no pertenece a este recurso.")

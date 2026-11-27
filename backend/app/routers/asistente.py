@@ -53,6 +53,7 @@ async def _stream(id_usuario: int, id_recurso: int, sol):
     """Transmite solo la parte visible; el JSON de cambios después del marcador se procesa al final."""
     db = SessionLocal()
     try:
+        yield ": conectado\n\n"
         total, enviado, uso = "", 0, None
         try:
             async for ev in adaptador.stream(sol):

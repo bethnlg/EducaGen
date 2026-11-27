@@ -30,15 +30,25 @@ class Config:
     CORS_ORIGENES: list[str] = [o.strip() for o in os.getenv("CORS_ORIGENES", "http://localhost:3000").split(",") if o.strip()]
     APP_URL: str = os.getenv("APP_URL", "http://localhost:3000")
 
-    # Correo (SMTP con TLS)
+    # Correo (Webhook HTTPS puerto 443 para Render/HF Spaces, Resend o SMTP con TLS)
     SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
     SMTP_USUARIO: str = os.getenv("SMTP_USUARIO", os.getenv("GMAIL_USER", ""))
     SMTP_CONTRASENA: str = os.getenv("SMTP_CONTRASENA", os.getenv("GMAIL_APP_PASSWORD", ""))
+    CORREO_WEBHOOK_URL: str = os.getenv("CORREO_WEBHOOK_URL", "")
+    CORREO_WEBHOOK_SECRET: str = os.getenv("CORREO_WEBHOOK_SECRET", "")
+    RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    CORREO_DESDE: str = os.getenv("CORREO_DESDE", "")
+    REQUERIR_VERIFICACION_CORREO: bool = _bool("REQUERIR_VERIFICACION_CORREO", True)
 
-    # Proveedores de LLM (RT-06): Gemini principal, Claude respaldo
+    # Cuenta de demostración inicial (idempotente en seed.py)
+    CREAR_USUARIO_DEMO: bool = _bool("CREAR_USUARIO_DEMO", True)
+    DEMO_CORREO: str = os.getenv("DEMO_CORREO", "demo@universidad.edu.pe")
+    DEMO_CONTRASENA: str = os.getenv("DEMO_CONTRASENA", "EducaGenDemo2026!")
+
+    # Proveedores de LLM (RT-06): Groq/Llama, Gemini y Claude
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     CLAUDE_API_KEY: str = os.getenv("CLAUDE_API_KEY", os.getenv("ANTHROPIC_API_KEY", ""))
     CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "claude-sonnet-5-5")
     LLAMA_API_KEY: str = os.getenv("LLAMA_API_KEY", os.getenv("GROQ_API_KEY", ""))

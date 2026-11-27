@@ -1,8 +1,10 @@
-"""Envío de correos por SMTP con TLS (I-10)."""
+"""Envío de correos por HTTPS (puerto 443) o SMTP con TLS (I-10)."""
 import logging
 import smtplib
 import ssl
 from email.message import EmailMessage
+
+import httpx
 
 from ..config import config
 
@@ -23,19 +25,51 @@ def _plantilla(titulo: str, cuerpo_html: str) -> str:
 
 
 def enviar(para: str, asunto: str, texto: str, html: str) -> bool:
+    # 1. Webhook HTTPS (puerto 443, ej. Google Apps Script con Gmail) para servidores con puerto 587 bloqueado
+    if config.CORREO_WEBHOOK_URL:
+        r = httpx.post(
+            config.CORREO_WEBHOOK_URL,
+            json={"to": para, "subject": asunto, "text": texto, "html": html, "secret": config.CORREO_WEBHOOK_SECRET},
+            follow_redirects=True,
+            timeout=20,
+        )
+        if r.status_code >= 400 or r.text.strip() == "403":
+            raise RuntimeError(f"Webhook de correo respondió {r.status_code}: {r.text[:200]}")
+        return True
+
+    # 2. API REST de Resend (puerto 443 HTTPS, opcional si se cuenta con dominio verificado)
+    if config.RESEND_API_KEY:
+        remitente = config.CORREO_DESDE or "EducaGen <onboarding@resend.dev>"
+        r = httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {config.RESEND_API_KEY}", "Content-Type": "application/json"},
+            json={"from": remitente, "to": [para], "subject": asunto, "text": texto, "html": html},
+            timeout=20,
+        )
+        if r.status_code >= 400:
+            raise RuntimeError(f"Resend respondió {r.status_code}: {r.text[:200]}")
+        return True
+
+    # 3. SMTP tradicional (puerto 587 STARTTLS o 465 SSL)
     if not config.SMTP_USUARIO or not config.SMTP_CONTRASENA:
-        log.warning("SMTP no configurado. Correo para %s no enviado. Contenido:\n%s", para, texto)
+        log.warning("Correo no configurado. Mensaje para %s no enviado. Contenido:\n%s", para, texto)
         return False
     msg = EmailMessage()
-    msg["From"] = f"EducaGen <{config.SMTP_USUARIO}>"
+    msg["From"] = config.CORREO_DESDE or f"EducaGen <{config.SMTP_USUARIO}>"
     msg["To"] = para
     msg["Subject"] = asunto
     msg.set_content(texto)
     msg.add_alternative(html, subtype="html")
-    with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=20) as servidor:
-        servidor.starttls(context=ssl.create_default_context())
-        servidor.login(config.SMTP_USUARIO, config.SMTP_CONTRASENA)
-        servidor.send_message(msg)
+    contexto_ssl = ssl.create_default_context()
+    if config.SMTP_PORT == 465:
+        with smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, context=contexto_ssl, timeout=20) as servidor:
+            servidor.login(config.SMTP_USUARIO, config.SMTP_CONTRASENA)
+            servidor.send_message(msg)
+    else:
+        with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=20) as servidor:
+            servidor.starttls(context=contexto_ssl)
+            servidor.login(config.SMTP_USUARIO, config.SMTP_CONTRASENA)
+            servidor.send_message(msg)
     return True
 
 
