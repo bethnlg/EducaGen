@@ -73,7 +73,7 @@ def registrar(datos: RegistroIn, respuesta: Response, tareas: BackgroundTasks, d
 
 
 @router.post("/login")
-def iniciar_sesion(datos: LoginIn, respuesta: Response, db: Session = Depends(get_db)):
+def iniciar_sesion(datos: LoginIn, respuesta: Response, tareas: BackgroundTasks, db: Session = Depends(get_db)):
     correo_n = datos.correo.strip().lower()
     if not correo_n or not datos.contrasena:
         _err(400, "Ingresa tu correo y contraseña.")
@@ -81,7 +81,13 @@ def iniciar_sesion(datos: LoginIn, respuesta: Response, db: Session = Depends(ge
     if not usuario or usuario.estado not in ("activo", "pendiente_verificacion") or not verificar_contrasena(datos.contrasena, usuario.hash_contrasena):
         _err(401, "El correo o la contraseña no son correctos.")  # HU0002-2: mensaje general
     if usuario.estado == "pendiente_verificacion":
-        _err(403, "Confirma tu correo institucional desde el enlace que enviamos antes de iniciar sesión.", codigo="correo_no_verificado")
+        token, token_hash = nuevo_token_recuperacion()
+        db.add(TokenVerificacion(id_usuario=usuario.id_usuario, token_hash=token_hash,
+                                 fecha_expiracion=datetime.now(timezone.utc) + timedelta(hours=24)))
+        db.commit()
+        enlace = f"{config.APP_URL}/verificar?correo={correo_n}&token={token}"
+        tareas.add_task(_enviar_seguro, correo.enviar_verificacion, correo_n, usuario.nombre_completo, enlace)
+        _err(403, "Confirma tu correo institucional desde el enlace que acabamos de enviarte antes de iniciar sesión.", codigo="correo_no_verificado")
     usuario.ultimo_acceso = datetime.now(timezone.utc)
     db.commit()
     _poner_cookie(respuesta, usuario)

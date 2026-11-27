@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS usuario (
     apellidos             VARCHAR(100) NOT NULL DEFAULT '',
     correo_institucional  VARCHAR(150) NOT NULL UNIQUE,
     hash_contrasena       VARCHAR(255) NOT NULL,
-    estado                VARCHAR(20)  NOT NULL DEFAULT 'activo',
+    estado                VARCHAR(40)  NOT NULL DEFAULT 'activo',
     fecha_registro        TIMESTAMPTZ  NOT NULL DEFAULT now(),
     ultimo_acceso         TIMESTAMPTZ
 );
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS recurso_educativo (
     id_tipo_recurso     INTEGER NOT NULL REFERENCES tipo_recurso(id_tipo_recurso),
     id_recurso_origen   INTEGER REFERENCES recurso_educativo(id_recurso) ON DELETE SET NULL,
     titulo              VARCHAR(200) NOT NULL,
-    estado              VARCHAR(20)  NOT NULL DEFAULT 'borrador',  -- generando | borrador | pendiente | aprobado
+    estado              VARCHAR(40)  NOT NULL DEFAULT 'borrador',  -- generando | borrador | pendiente | aprobado
     fecha_creacion      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     fecha_actualizacion TIMESTAMPTZ  NOT NULL DEFAULT now(),
     fecha_aprobacion    TIMESTAMPTZ,
@@ -163,9 +163,9 @@ CREATE TABLE IF NOT EXISTS consulta_llm (
     id_consulta          SERIAL PRIMARY KEY,
     id_recurso           INTEGER REFERENCES recurso_educativo(id_recurso) ON DELETE SET NULL,
     id_usuario           INTEGER NOT NULL REFERENCES usuario(id_usuario) ON DELETE CASCADE,
-    proveedor            VARCHAR(20) NOT NULL,
-    modelo               VARCHAR(60) NOT NULL,
-    tipo_operacion       VARCHAR(20) NOT NULL,              -- generacion | asistente | regeneracion | calificacion
+    proveedor            VARCHAR(40) NOT NULL,
+    modelo               VARCHAR(120) NOT NULL,
+    tipo_operacion       VARCHAR(40) NOT NULL,              -- generacion | asistente | regeneracion | calificacion
     tokens_entrada       INTEGER NOT NULL DEFAULT 0,
     tokens_salida        INTEGER NOT NULL DEFAULT 0,
     tiempo_respuesta_ms  INTEGER,

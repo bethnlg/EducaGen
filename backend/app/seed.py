@@ -153,12 +153,17 @@ def inicializar():
     if es_postgres():
         try:
             with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE usuario ALTER COLUMN estado TYPE VARCHAR(40)"))
+                conn.execute(text("ALTER TABLE recurso_educativo ALTER COLUMN estado TYPE VARCHAR(40)"))
+                conn.execute(text("ALTER TABLE consulta_llm ALTER COLUMN proveedor TYPE VARCHAR(40)"))
+                conn.execute(text("ALTER TABLE consulta_llm ALTER COLUMN modelo TYPE VARCHAR(120)"))
+                conn.execute(text("ALTER TABLE consulta_llm ALTER COLUMN tipo_operacion TYPE VARCHAR(40)"))
                 conn.execute(text(
                     "CREATE INDEX IF NOT EXISTS ix_material_fts ON material_modelo "
                     "USING GIN (to_tsvector('spanish', titulo || ' ' || contenido_texto))"
                 ))
         except Exception as e:
-            log.warning("No se pudo crear el índice FTS en PostgreSQL: %s", e)
+            log.warning("No se pudo actualizar esquemas/índices en PostgreSQL: %s", e)
     with SessionLocal() as db:
         sembrar(db)
 

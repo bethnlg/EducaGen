@@ -221,7 +221,7 @@ async def cargar_archivo(
     ruta.write_bytes(contenido)
     adjunto = ArchivoAdjunto(
         id_archivo=ruta.stem, id_usuario=usuario.id_usuario, nombre=archivo.filename[:200],
-        tipo=archivo.content_type or "application/octet-stream", tamano=len(contenido),
+        tipo=(archivo.content_type or "application/octet-stream")[:150], tamano=len(contenido),
         ruta=str(ruta), texto=texto[:config.MAX_TEXTO_ADJUNTO], texto_extraido=bool(texto.strip()),
     )
     db.add(adjunto)

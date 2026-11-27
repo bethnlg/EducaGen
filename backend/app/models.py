@@ -37,7 +37,7 @@ class Usuario(Base):
     apellidos: Mapped[str] = mapped_column(String(100), default="")
     correo_institucional: Mapped[str] = mapped_column(String(150), unique=True, index=True)
     hash_contrasena: Mapped[str] = mapped_column(String(255))
-    estado: Mapped[str] = mapped_column(String(20), default="activo")
+    estado: Mapped[str] = mapped_column(String(40), default="activo")
     fecha_registro: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)
     ultimo_acceso: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
@@ -100,7 +100,7 @@ class RecursoEducativo(Base):
     id_recurso_origen: Mapped[Optional[int]] = mapped_column(ForeignKey("recurso_educativo.id_recurso", ondelete="SET NULL"))
     titulo: Mapped[str] = mapped_column(String(200))
     # generando | borrador | pendiente (IA no disponible) | aprobado
-    estado: Mapped[str] = mapped_column(String(20), default="borrador")
+    estado: Mapped[str] = mapped_column(String(40), default="borrador")
     fecha_creacion: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)
     fecha_actualizacion: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)
     fecha_aprobacion: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -212,9 +212,9 @@ class ConsultaLLM(Base):
     id_consulta: Mapped[int] = mapped_column(Integer, primary_key=True)
     id_recurso: Mapped[Optional[int]] = mapped_column(ForeignKey("recurso_educativo.id_recurso", ondelete="SET NULL"))
     id_usuario: Mapped[int] = mapped_column(ForeignKey("usuario.id_usuario", ondelete="CASCADE"), index=True)
-    proveedor: Mapped[str] = mapped_column(String(20))
-    modelo: Mapped[str] = mapped_column(String(60))
-    tipo_operacion: Mapped[str] = mapped_column(String(20))  # generacion | asistente | regeneracion | calificacion
+    proveedor: Mapped[str] = mapped_column(String(40))
+    modelo: Mapped[str] = mapped_column(String(120))
+    tipo_operacion: Mapped[str] = mapped_column(String(40))  # generacion | asistente | regeneracion | calificacion
     tokens_entrada: Mapped[int] = mapped_column(Integer, default=0)
     tokens_salida: Mapped[int] = mapped_column(Integer, default=0)
     tiempo_respuesta_ms: Mapped[Optional[int]] = mapped_column(Integer)
